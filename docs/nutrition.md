@@ -9,11 +9,11 @@ status: current
 
 # Nutrition
 
-The Nutrition tab logs what was eaten each day against a calorie and a protein target. Carbs and fat are carried and totalled but have no targets (owner decision). Targets are general guidelines for healthy adults, not medical advice, and the app says so.
+The Nutrition tab logs what was eaten each day against four daily targets: calories, protein, carbs and fat. Carbs and fat are set as a share of calories or in grams (owner decision, replacing the earlier calories-and-protein-only targets). Targets are general guidelines for healthy adults, not medical advice, and the app says so.
 
 | File | Role |
 |------|------|
-| `nutrition.js` | Targets maths, day keys and day totals. Pure functions, unit-tested (`tests/nutrition.test.mjs`) |
+| `nutrition.js` | Targets maths (calories, protein, carbs and fat), day keys and day totals. Pure functions, unit-tested (`tests/nutrition.test.mjs`) |
 | `foods.js` | Food shapes, search ranking, serving units, building a log entry. Pure, unit-tested (`tests/foods.test.mjs`) |
 | `nutrition-view.js` | The Nutrition tab, the Today tab's tiles, and every nutrition sheet (profile, add food, quick add, my foods, edit entry) |
 | `foods/jp.json`, `foods/us.json` | The bundled food tables (see [Food tables](#food-tables)) |
@@ -26,11 +26,12 @@ From the profile (sex, year of birth, height, weight, activity, optional goal we
 - **Maintenance**: resting energy x activity factor (sedentary 1.2, light 1.375, moderate 1.55, active 1.725, very active 1.9).
 - **Calorie target**: maintenance minus the profile's daily deficit (default 500 kcal, about 0.45 kg a week; 0-1000 allowed), rounded to 10 kcal, never below a floor of 1200 kcal (women) or 1500 kcal (men). When the floor applies, the profile preview says so, and the real deficit (maintenance minus target) is what the projection uses.
 - **Protein target**: weight x grams per kg (default 1.8, allowed 1.6-2.2).
+- **Carbs and fat**: set in the profile sheet either as a percent of the calorie target or as grams a day (4 kcal per gram of carbs and protein, 9 per gram of fat). The sheet shows both columns side by side and fills the one not being typed in. Whichever side was edited last is what is saved (`macroMode` `"pct"` or `"g"`): as percents, the grams follow the calorie target whenever it changes (a new weight, deficit or activity level); as grams, the grams stay put and the percents shown follow. With no saved choice (`macroMode` null, also every profile saved before this existed), fat is 30 % of calories and carbs take what protein and fat leave, so the three add up to 100 %. Protein stays set in g per kg; its share of calories is shown alongside. When the three add up to more or less than the calorie target (beyond 2 %), the preview says so; carbs plus fat over 100 % will not save. Conversions are `gramsFromPct`, `pctFromGrams` and `macroTargets` in `nutrition.js`.
 - **Projection**: with a goal weight below the current weight, days to goal = kg to lose x 7700 kcal / real deficit. The preview shows that date and whether it lands on or before the target date. The target date never changes the deficit (owner decision: a fixed, adjustable deficit).
 
 `profileProblems()` validates a profile (adults 18-100, plausible height and weight ranges, the deficit and protein ranges); the sheet shows the first problem and will not save until there are none. Weight is entered in kg with lb shown under the field.
 
-The profile's weight drives the targets for now; the weigh-ins phase will feed in the latest weight.
+Once there are weigh-ins, the profile's weight follows their latest 7-day average (every weigh-in change rewrites it; see [weight.md](weight.md#profile-weight)), so the targets follow the trend. The sheet notes this under the weight field.
 
 ## Food log
 
@@ -63,4 +64,4 @@ MEXT values: estimates in parentheses are kept as numbers, "Tr" counts as 0, pro
 
 ## Today tab
 
-The Today tab's Calories and Protein tiles show what is left of today's targets (or how far over), with a bar; without a profile they show what was eaten and point to the profile.
+The Today tab's Calories and Protein tiles, and smaller Carbs and Fat tiles under them, show what is left of today's targets (or how far over), with a bar; without a profile they show what was eaten and point to the profile. The Nutrition tab's summary card has a bar for each of the four. Below the tiles, Today shows the weight card ([weight.md](weight.md)).

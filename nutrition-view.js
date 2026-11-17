@@ -2,7 +2,7 @@
 // the profile sheet, the add-food flow (search, quick-add, my foods) and the
 // Today tab's tiles. Targets maths lives in nutrition.js, search in foods.js.
 import * as db from "./db.js";
-import { ACTIVITY, DEFAULT_DEFICIT, DEFAULT_PROTEIN_PER_KG, MAX_DEFICIT, PROTEIN_RANGE, MEALS, profileProblems, targets, projection, dayKey, shiftDay, byMeal, sumEntries, entryNutrients, kgToLb, mealForHour } from "./nutrition.js";
+import { ACTIVITY, DEFAULT_DEFICIT, MACRO_LIMITS, DEFAULT_PROTEIN_PER_KG, MAX_DEFICIT, PROTEIN_RANGE, MEALS, profileProblems, targets, projection, dayKey, shiftDay, byMeal, sumEntries, entryNutrients, kgToLb, mealForHour } from "./nutrition.js";
 import { SOURCES, fromTableRow, fromMyFood, searchFoods, makeEntry, recentMyFoods, unitLabel } from "./foods.js";
 import { esc, int, dec1, newId, openPanel, swapPanel, closePanel, panelEl, closeBtn, backBtn } from "./ui.js";
 
@@ -41,14 +41,19 @@ export async function todayTiles() {
   const [profile, entries] = await Promise.all([loadProfile(), db.getByIndex("entries", "date", dayKey())]);
   const t = targetsFor(profile);
   const eaten = sumEntries(entries);
-  const tile = (label, left, eatenTxt, target, unit, cls) => {
-    if (!t) return `<div class="card stat"><span class="stat-label">${label}</span><span class="stat-value">${eatenTxt}</span><span class="hint">eaten today. <a href="#nutrition">Set up your profile</a> for a target.</span></div>`;
+  const tile = (label, eatenN, target, unit, cls, small = false) => {
+    if (!t) return `<div class="card stat${small ? " mini" : ""}"><span class="stat-label">${label}</span><span class="stat-value">${int(eatenN)}${unit}</span><span class="hint">eaten today${small ? "" : `. <a href="#nutrition">Set up your profile</a> for a target`}.</span></div>`;
+    const left = target - eatenN;
     const over = left < 0;
-    return `<div class="card stat"><span class="stat-label">${label}</span><span class="stat-value${over ? " over-text" : ""}">${int(Math.abs(left))}${unit}</span><span class="hint">${over ? "over" : "left"} of ${int(target)}${unit}</span>${bar(target - left, target, cls)}</div>`;
+    return `<div class="card stat${small ? " mini" : ""}"><span class="stat-label">${label}</span><span class="stat-value${over ? " over-text" : ""}">${int(Math.abs(left))}${unit}</span><span class="hint">${over ? "over" : "left"} of ${int(target)}${unit}</span>${bar(eatenN, target, cls)}</div>`;
   };
   return `<div class="grid2">
-    ${tile("Calories", t ? t.kcal - eaten.kcal : 0, int(eaten.kcal), t?.kcal, "", "")}
-    ${tile("Protein", t ? t.protein - eaten.protein : 0, `${int(eaten.protein)}g`, t?.protein, "g", "protein")}
+    ${tile("Calories", eaten.kcal, t?.kcal, "", "")}
+    ${tile("Protein", eaten.protein, t?.protein, "g", "protein")}
+  </div>
+  <div class="grid2 minis">
+    ${tile("Carbs", eaten.carbs, t?.macros.carbs, "g", "carbs", true)}
+    ${tile("Fat", eaten.fat, t?.macros.fat, "g", "fat", true)}
   </div>`;
 }
 
@@ -78,7 +83,10 @@ export async function nutritionView() {
         <div class="right"><span class="sum-left${total.protein >= t.protein ? " good-text" : ""}">${total.protein >= t.protein ? "Hit" : `${int(t.protein - total.protein)}g`}</span><span class="hint">${total.protein >= t.protein ? "" : " to go"}</span></div>
       </div>
       ${bar(total.protein, t.protein, "protein")}
-      <p class="macros">Carbs ${int(total.carbs)}g · Fat ${int(total.fat)}g</p>
+      <div class="macro-rows">
+        ${macroRow("Carbs", total.carbs, t.macros.carbs, "carbs")}
+        ${macroRow("Fat", total.fat, t.macros.fat, "fat")}
+      </div>
     </div>` : `
     <div class="card summary">
       <div class="sum-row"><div><span class="stat-label">Eaten</span><span class="sum-big">${int(total.kcal)}</span><span class="muted"> kcal</span></div><div class="right"><span class="sum-big protein-text">${int(total.protein)}g</span><span class="muted"> protein</span></div></div>
@@ -119,6 +127,15 @@ export async function nutritionView() {
       <button type="button" class="btn ghost" data-act="n-myfoods">My foods</button>
     </div>
     <p class="hint credits">Food data: Standard Tables of Food Composition in Japan 2020 (MEXT) and USDA FoodData Central. Targets are general guidelines, not medical advice.</p>`;
+}
+
+// A smaller row for carbs and fat under the calorie and protein bars.
+function macroRow(label, eaten, target, cls) {
+  const over = eaten > target;
+  return `<div class="macro-row">
+    <div class="sum-row"><span class="stat-label">${label}</span><span class="small"><strong class="${cls}-text">${int(eaten)}g</strong><span class="muted"> / ${int(target)}g</span><span class="hint${over ? " over-text" : ""}"> · ${int(Math.abs(target - eaten))}g ${over ? "over" : "left"}</span></span></div>
+    ${bar(eaten, target, cls)}
+  </div>`;
 }
 
 function amountText(e) {
@@ -162,7 +179,17 @@ function readProfile(form) {
     targetDate: String(fd.get("targetDate") ?? "") || null,
     deficit: num("deficit"),
     proteinPerKg: num("proteinPerKg"),
+    ...readMacros(fd, num),
   };
+}
+
+// Carbs and fat as the sheet holds them: whichever side was edited last
+// (percent or grams) is the one saved; "auto" saves neither (the defaults).
+function readMacros(fd, num) {
+  const mode = fd.get("macroMode");
+  if (mode === "pct") return { macroMode: "pct", carbPct: num("carbPct"), fatPct: num("fatPct") };
+  if (mode === "g") return { macroMode: "g", carbG: num("carbG"), fatG: num("fatG") };
+  return { macroMode: null };
 }
 
 function fmtDate(key) {
@@ -187,10 +214,44 @@ function profilePreview(p) {
       <div><dt>Resting energy</dt><dd>${int(t.bmr)} kcal</dd></div>
       <div><dt>Maintenance</dt><dd>${int(t.tdee)} kcal</dd></div>
       <div><dt>Daily calorie target</dt><dd>${int(t.kcal)} kcal</dd></div>
-      <div><dt>Daily protein target</dt><dd>${int(t.protein)} g</dd></div>
+      <div><dt>Daily protein target</dt><dd>${int(t.protein)} g · ${int(t.macros.proteinPct)} %</dd></div>
+      <div><dt>Daily carbs target</dt><dd>${int(t.macros.carbs)} g · ${int(t.macros.carbPct)} %</dd></div>
+      <div><dt>Daily fat target</dt><dd>${int(t.macros.fat)} g · ${int(t.macros.fatPct)} %</dd></div>
     </dl>
+    ${Math.abs(t.macros.totalPct - 100) > 2 ? `<p class="small warn-text">Protein, carbs and fat add up to ${int(t.macros.totalPct)} % of your calorie target, so hitting all three ${t.macros.totalPct > 100 ? "goes over" : "falls short of"} it.</p>` : ""}
     ${t.floored ? `<p class="small warn-text">The target is held at ${int(t.floor)} kcal, the lowest this app sets, so the real deficit is ${int(t.deficit)} kcal.</p>` : ""}
     ${projLine}`;
+}
+
+// The values the carbs/fat grid shows for a profile: the saved side as saved,
+// the other side worked out from the calorie target (blank until the profile
+// is complete enough to have one).
+function macroFields(p) {
+  const t = profileProblems({ ...p, macroMode: null }).length ? null : targets({ ...p, macroMode: p.macroMode ?? null });
+  const out = { carbPct: p.carbPct ?? null, fatPct: p.fatPct ?? null, carbG: p.carbG ?? null, fatG: p.fatG ?? null, proteinPct: null, proteinG: null };
+  if (!t) return out;
+  const mt = t.macros;
+  out.proteinPct = `${int(mt.proteinPct)} %`;
+  out.proteinG = `${int(t.protein)} g`;
+  if (p.macroMode === "pct") { out.carbG = mt.carbs; out.fatG = mt.fat; }
+  else if (p.macroMode === "g") { out.carbPct = mt.carbPct; out.fatPct = mt.fatPct; }
+  else Object.assign(out, { carbPct: mt.carbPct, fatPct: mt.fatPct, carbG: mt.carbs, fatG: mt.fat });
+  return out;
+}
+
+// Refill the side of the carbs/fat grid that follows, after any edit.
+// `edited` is the field just typed in (it is never overwritten).
+function syncMacroFields(form, edited) {
+  const np = readProfile(form);
+  const f = macroFields(np);
+  const el = form.elements;
+  const mode = el.macroMode.value;
+  const keep = new Set([edited]);
+  if (mode === "pct") { keep.add("carbPct"); keep.add("fatPct"); }
+  if (mode === "g") { keep.add("carbG"); keep.add("fatG"); }
+  for (const k of ["carbPct", "fatPct", "carbG", "fatG"]) if (!keep.has(k)) el[k].value = f[k] ?? "";
+  panelEl().querySelector("#protein-pct").textContent = f.proteinPct ?? "–";
+  panelEl().querySelector("#protein-g").textContent = f.proteinG ?? "–";
 }
 
 const lbHint = (kg) => (kg > 0 ? `${dec1(kgToLb(kg))} lb` : "");
@@ -200,6 +261,8 @@ async function openProfile() {
   const p = { sex: null, birthYear: null, heightCm: null, weightKg: null, activity: "moderate", goalKg: null, targetDate: null, deficit: DEFAULT_DEFICIT, proteinPerKg: DEFAULT_PROTEIN_PER_KG, ...saved };
   const v = (x) => (x === null || x === undefined ? "" : esc(x));
   const year = new Date().getFullYear();
+  const m = macroFields(p);
+  const weighInsNote = (await db.getAll("weighIns")).length ? `<small class="hint">Follows your weigh-ins (7-day average)</small>` : "";
   openPanel(`
     <div class="sheet-head"><h2 id="panel-title">Profile &amp; targets</h2>${closeBtn}</div>
     <p class="sub">Your daily targets come from these. They stay on this device.</p>
@@ -213,7 +276,7 @@ async function openProfile() {
         <label class="field"><span>Height (cm)</span><input name="heightCm" type="number" inputmode="decimal" step="0.1" value="${v(p.heightCm)}"></label>
       </div>
       <div class="grid2">
-        <label class="field"><span>Weight (kg)</span><input name="weightKg" type="number" inputmode="decimal" step="0.1" value="${v(p.weightKg)}"><small class="hint" data-lb="weightKg">${lbHint(p.weightKg)}</small></label>
+        <label class="field"><span>Weight (kg)</span><input name="weightKg" type="number" inputmode="decimal" step="0.1" value="${v(p.weightKg)}"><small class="hint" data-lb="weightKg">${lbHint(p.weightKg)}</small>${weighInsNote}</label>
         <label class="field"><span>Goal weight (kg)</span><input name="goalKg" type="number" inputmode="decimal" step="0.1" value="${v(p.goalKg)}"><small class="hint" data-lb="goalKg">${lbHint(p.goalKg)}</small></label>
       </div>
       <label class="field"><span>Activity</span><select name="activity">
@@ -224,12 +287,39 @@ async function openProfile() {
         <label class="field"><span>Daily deficit (kcal)</span><input name="deficit" type="number" inputmode="numeric" min="0" max="${MAX_DEFICIT}" step="50" value="${v(p.deficit)}"><small class="hint">500 ≈ 0.45 kg a week</small></label>
         <label class="field"><span>Protein (g per kg)</span><input name="proteinPerKg" type="number" inputmode="decimal" min="${PROTEIN_RANGE[0]}" max="${PROTEIN_RANGE[1]}" step="0.1" value="${v(p.proteinPerKg)}"><small class="hint">${PROTEIN_RANGE[0]}-${PROTEIN_RANGE[1]} keeps muscle on a cut</small></label>
       </div>
+      <fieldset class="macro-set"><legend>Carbs and fat</legend>
+        <p class="hint">Set them as a share of calories or in grams; the other column follows. As a share, the grams move with your calorie target.</p>
+        <div class="macro-grid">
+          <span></span><span class="hint">% of calories</span><span class="hint">Grams a day</span>
+          <span class="macro-name">Carbs</span>
+          <input name="carbPct" type="number" inputmode="decimal" min="0" max="100" step="1" aria-label="Carbs, percent of calories" value="${v(m.carbPct)}">
+          <input name="carbG" type="number" inputmode="numeric" min="0" max="${MACRO_LIMITS.carbG[1]}" step="1" aria-label="Carbs, grams a day" value="${v(m.carbG)}">
+          <span class="macro-name">Fat</span>
+          <input name="fatPct" type="number" inputmode="decimal" min="0" max="100" step="1" aria-label="Fat, percent of calories" value="${v(m.fatPct)}">
+          <input name="fatG" type="number" inputmode="numeric" min="0" max="${MACRO_LIMITS.fatG[1]}" step="1" aria-label="Fat, grams a day" value="${v(m.fatG)}">
+          <span class="macro-name">Protein</span><output id="protein-pct">${m.proteinPct ?? "–"}</output><output id="protein-g">${m.proteinG ?? "–"}</output>
+        </div>
+        <input type="hidden" name="macroMode" value="${esc(p.macroMode ?? "auto")}">
+        <button type="button" class="link-btn" data-act="macro-reset">Use the default (fat 30 %, carbs the rest)</button>
+      </fieldset>
       <div id="profile-preview" class="preview" aria-live="polite">${profilePreview(p)}</div>
       <button class="btn" type="submit">Save profile</button>
       <p class="msg bad" role="status" id="profile-msg"></p>
     </form>`, {
+    click: (act) => {
+      if (act !== "macro-reset") return;
+      const form = panelEl().querySelector("#profile-form");
+      form.elements.macroMode.value = "auto";
+      syncMacroFields(form, null);
+      panelEl().querySelector("#profile-preview").innerHTML = profilePreview(readProfile(form));
+    },
     input: (e) => {
       const form = panelEl().querySelector("#profile-form");
+      const name = e.target.name;
+      if (name === "carbPct" || name === "fatPct") form.elements.macroMode.value = "pct";
+      else if (name === "carbG" || name === "fatG") form.elements.macroMode.value = "g";
+      // A percent edited while on the default fixes the other percent where it showed.
+      syncMacroFields(form, name);
       const np = readProfile(form);
       panelEl().querySelector("#profile-preview").innerHTML = profilePreview(np);
       const lb = e.target.name && panelEl().querySelector(`[data-lb="${e.target.name}"]`);
