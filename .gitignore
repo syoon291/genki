@@ -1,0 +1,12 @@
+.DS_Store
+node_modules/
+.env
+.env.*
+!.env.example
+*.pem
+# never commit personal data or exports
+data/
+exports/
+*.genki.json
+.claude/*
+!.claude/test-manifest.json
