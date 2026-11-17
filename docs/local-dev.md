@@ -33,9 +33,14 @@ To try it on a phone, serve on your machine and open the machine's LAN address f
 Two fast stacks, both in the manifest and both run by CI on every PR:
 
 - **unit**: Node's built-in test runner over `tests/*.test.mjs`. Code that can run without a browser (formats, calculations) goes in its own module so it can be tested here.
-- **check** (`scripts/check.mjs`): every script parses, the web manifest is valid and its icons exist, every file `sw.js` precaches exists, every module `app.js` imports is precached, and the Pages workflow copies every precached file into the site.
+- **check** (`scripts/check.mjs`): every script parses, the web manifest is valid and its icons exist, every file `sw.js` precaches exists, every module the app imports is precached, every food table the app fetches is precached and well formed, and the Pages workflow copies every precached file into the site.
+
+## Food tables
+
+`foods/jp.json` and `foods/us.json` are built files, committed. To rebuild them after a source update, download the three sources named at the top of `scripts/build-foods.mjs` into one folder (the MEXT 2020 sheet as `mext2020.xlsx`, the 2015 English sheet as `mext2015en.xlsx`, the USDA SR Legacy CSV zip unzipped as `sr/`), then run the script from the repo root with that folder as its argument. It needs `unzip` on the path (`scripts/xlsx.mjs` reads the spreadsheets with it) and no packages. Review the diff: one food per line. What the script keeps and why is in [nutrition.md](nutrition.md#food-tables).
 
 ## Gotchas
 
 - Public repo: test fixtures use made-up values only, never the owner's real data.
-- A new file the app loads must go in three places: the `SHELL` list in `sw.js`, the copy step in the Pages workflow, and (if it is a module) an import the check can see. The check catches the first two.
+- A new file the app loads must go in three places: the `SHELL` list in `sw.js`, the copy step in the Pages workflow, and (if it is a module) the `MODULES` list in `scripts/check.mjs`. The check catches the first two.
+- The food tables are fetched on first use of the add-food sheet; on a fresh origin that is about 1 MB (about 200 KB compressed on Pages).

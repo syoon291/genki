@@ -3,16 +3,22 @@
 // adding a step to UPGRADES; existing data is never dropped by an upgrade.
 
 export const DB_NAME = "genki";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 // The keyPath of each store, so a backup can be checked before it replaces anything.
-export const KEY_PATHS = { meta: "key" };
+export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id" };
 
 // UPGRADES[n] moves a database from version n to n+1.
 const UPGRADES = [
   (db) => {
     // Key-value settings and small app facts: { key, value }.
     db.createObjectStore("meta", { keyPath: KEY_PATHS.meta });
+  },
+  (db) => {
+    // Food log: one record per food eaten, found by its local day ("YYYY-MM-DD").
+    db.createObjectStore("entries", { keyPath: KEY_PATHS.entries }).createIndex("date", "date");
+    // Saved foods: name and nutrients per serving.
+    db.createObjectStore("myFoods", { keyPath: KEY_PATHS.myFoods });
   },
 ];
 
@@ -67,10 +73,25 @@ export async function getAll(store) {
   return result(db.transaction(store).objectStore(store).getAll());
 }
 
+// Every record whose `index` equals `value`, e.g. getByIndex("entries", "date", "2026-01-02").
+export async function getByIndex(store, index, value) {
+  const db = await openDB();
+  return result(db.transaction(store).objectStore(store).index(index).getAll(value));
+}
+
 export async function put(store, record) {
   const db = await openDB();
   const tx = db.transaction(store, "readwrite");
   tx.objectStore(store).put(record);
+  return done(tx);
+}
+
+// Several puts in one transaction: all land or none do.
+export async function putMany(store, records) {
+  const db = await openDB();
+  const tx = db.transaction(store, "readwrite");
+  const os = tx.objectStore(store);
+  for (const r of records) os.put(r);
   return done(tx);
 }
 

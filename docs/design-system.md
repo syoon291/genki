@@ -36,7 +36,12 @@ The system font stack at 16px. Screen titles (`h2`) 26px bold with tight trackin
 - **Stat tile** (`.stat` in a `.grid2`): label, big number, hint.
 - **Button** (`.btn`, full width, 48px tall; `.ghost` for secondary) and **icon button** (`.icon-btn`, 40px).
 - **Bottom tabs** (`.tabs`): three equal columns, icon over label, active tab in the accent.
-- **Sheet** (`dialog` + `.sheet`): bottom sheet on a phone, centered card from 640px; `.facts` for label/value rows and `.msg` (`.good`/`.bad`) for the status line.
+- **Sheet** (`dialog` + `.sheet`): bottom sheet on a phone, centered card from 640px; `.facts` for label/value rows and `.msg` (`.good`/`.bad`) for the status line. The general sheet scrolls inside itself up to 92% of the screen height; `.sheet-head .grow` takes a long title between a back and a close button.
+- **Progress bar** (`.bar`): accent fill for calories, `.protein` for protein, `.over` turns it to the warning color past the target.
+- **Day summary** (`.summary`, `.sum-row`, `.sum-big`, `.sum-left`, `.macros`) and **day navigation** (`.title-row`, `.day-nav`, `.day-label`).
+- **List rows** (`.entries` of `.entry` / `.result` buttons): name with a hint line on the left, kcal with protein on the right; `.add-btn` is the dashed add button under each meal.
+- **Forms** (`.form`, `.field`, `.seg` segmented radio, `.check` checkbox row, `.preview` live result box, `.btn.danger` for destructive actions, `.search`).
+- Text colors: `.protein-text`, `.over-text` (warn), `.good-text`, `.bad-text`, `.warn-text`.
 
 ## App icon
 

@@ -3,6 +3,8 @@
 // The tab is kept in the URL hash so a reload stays where you were.
 import * as db from "./db.js";
 import { buildBackup, backupFileName, parseBackup, countRecords } from "./backup.js";
+import { esc, initPanel } from "./ui.js";
+import { nutritionView, todayTiles, handleViewClick, setRerender } from "./nutrition-view.js";
 
 const TABS = ["today", "nutrition", "workouts"];
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -10,8 +12,6 @@ const view = $("#view");
 const dialog = $("#data-dialog");
 const sheet = $("#data-sheet");
 const fileInput = $("#import-file");
-
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 let storeError = null;
 
@@ -31,22 +31,14 @@ function greeting(d = new Date()) {
 }
 
 const RENDER = {
-  today: () => `
+  today: async () => `
     <h2>${greeting()}</h2>
     <p class="sub">${esc(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }))}</p>
-    <div class="grid2">
-      <div class="card stat"><span class="stat-label">Calories left</span><span class="stat-value">--</span><span class="hint">Set up your profile in Nutrition</span></div>
-      <div class="card stat"><span class="stat-label">Protein left</span><span class="stat-value">--</span><span class="hint">Targets come from your profile</span></div>
-    </div>
+    ${storeError ? "" : await todayTiles()}
+    <a class="btn ghost log-link" href="#nutrition">Log food</a>
     <h3>Next workout</h3>
     <div class="card empty"><p>No plan picked yet.</p><a class="btn ghost" href="#workouts">Go to Workouts</a></div>`,
-  nutrition: () => `
-    <h2>Nutrition</h2>
-    <p class="sub">Calories and protein against your daily targets.</p>
-    <div class="card empty">
-      <p><strong>Food log is on the way.</strong></p>
-      <p class="muted small">Next up: your profile and daily targets, a food log with quick-add and saved foods, and weigh-ins with a 7-day trend.</p>
-    </div>`,
+  nutrition: () => (storeError ? `<h2>Nutrition</h2>` : nutritionView()),
   workouts: () => `
     <h2>Workouts</h2>
     <p class="sub">Your plan, your sets, your records.</p>
@@ -56,7 +48,10 @@ const RENDER = {
     </div>`,
 };
 
-function render() {
+// Views read IndexedDB, so rendering is async; a newer render wins over a slower older one.
+let renderSeq = 0;
+async function render() {
+  const seq = ++renderSeq;
   const tab = currentTab();
   for (const b of document.querySelectorAll(".tabs button")) {
     const on = b.dataset.tab === tab;
@@ -64,8 +59,19 @@ function render() {
     if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   }
   const banner = storeError ? `<div class="card warn-card" role="alert"><strong>Storage is unavailable.</strong> <span class="small">${esc(storeError)} Nothing you enter will be saved.</span></div>` : "";
-  view.innerHTML = banner + RENDER[tab]();
+  let html;
+  try { html = await RENDER[tab](); }
+  catch (e) { html = `<div class="card warn-card" role="alert"><strong>Something went wrong.</strong> <span class="small">${esc(e.message)}</span></div>`; }
+  if (seq !== renderSeq) return;
+  view.innerHTML = banner + html;
 }
+
+setRerender(() => render());
+initPanel();
+view.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]");
+  if (el && view.contains(el)) handleViewClick(el.dataset.act, el).catch((err) => alert(`That did not work: ${err.message}`));
+});
 
 document.querySelector(".tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-tab]");

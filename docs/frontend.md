@@ -1,12 +1,13 @@
 ---
 owns:
   - app.js
+  - ui.js
 status: current
 ---
 
 # Frontend
 
-The whole UI is `app.js`, rendered into the one `<main id="view">` element of `index.html`. Each tab re-renders the view from current state.
+`app.js` is the shell: it routes tabs and renders each into the one `<main id="view">` element of `index.html`, re-reading current state from IndexedDB each time (rendering is async; a newer render wins over a slower one). Feature views live in their own modules (`nutrition-view.js`, see [nutrition.md](nutrition.md)); `app.js` forwards taps on any `[data-act]` element in the view to them. `ui.js` holds shared helpers: `esc()`, number formats, ids, and the general bottom sheet.
 
 ## Tabs
 
@@ -14,11 +15,15 @@ The bottom bar has three tabs. The current tab lives in the URL hash (`#today`, 
 
 | Tab | What it shows now |
 |-----|-------------------|
-| Today | Greeting by time of day, the date, "Calories left" and "Protein left" tiles (placeholders until the nutrition phase adds targets), and a "Next workout" card linking to Workouts |
-| Nutrition | Placeholder card describing what is coming (profile and targets, food log, weigh-ins) |
+| Today | Greeting by time of day, the date, Calories and Protein tiles (left of today's targets, see [nutrition.md](nutrition.md#today-tab)), a "Log food" button, and a "Next workout" card linking to Workouts |
+| Nutrition | The day's food log against the targets, with the profile, add-food and my-foods sheets. See [nutrition.md](nutrition.md) |
 | Workouts | Placeholder card describing what is coming (plans, set logging, records, volume) |
 
 If IndexedDB cannot be opened (private browsing in some browsers, storage blocked), every tab shows a "Storage is unavailable" banner and nothing is saved.
+
+## General sheet
+
+`ui.js` drives a second `<dialog>` (`#panel-dialog`, same bottom-sheet look) that views fill with their own content: `openPanel(html, handlers)` shows it, `swapPanel()` replaces its content for the next step of a flow (with a back button), `closePanel()` hides it. Handlers get every tap on a `[data-act]` element, every form submit (default prevented) and every input change inside it; `data-act="close"` always closes. Forms use `novalidate` and show the first problem in a status line.
 
 ## Data & backup sheet
 
