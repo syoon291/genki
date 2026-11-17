@@ -3,10 +3,10 @@
 // adding a step to UPGRADES; existing data is never dropped by an upgrade.
 
 export const DB_NAME = "genki";
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 // The keyPath of each store, so a backup can be checked before it replaces anything.
-export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id" };
+export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id", weighIns: "date" };
 
 // UPGRADES[n] moves a database from version n to n+1.
 const UPGRADES = [
@@ -19,6 +19,10 @@ const UPGRADES = [
     db.createObjectStore("entries", { keyPath: KEY_PATHS.entries }).createIndex("date", "date");
     // Saved foods: name and nutrients per serving.
     db.createObjectStore("myFoods", { keyPath: KEY_PATHS.myFoods });
+  },
+  (db) => {
+    // Weigh-ins: at most one per local day, keyed by that day ("YYYY-MM-DD").
+    db.createObjectStore("weighIns", { keyPath: KEY_PATHS.weighIns });
   },
 ];
 

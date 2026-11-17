@@ -7,7 +7,7 @@ status: current
 
 # Frontend
 
-`app.js` is the shell: it routes tabs and renders each into the one `<main id="view">` element of `index.html`, re-reading current state from IndexedDB each time (rendering is async; a newer render wins over a slower one). Feature views live in their own modules (`nutrition-view.js`, see [nutrition.md](nutrition.md)); `app.js` forwards taps on any `[data-act]` element in the view to them. `ui.js` holds shared helpers: `esc()`, number formats, ids, and the general bottom sheet.
+`app.js` is the shell: it routes tabs and renders each into the one `<main id="view">` element of `index.html`, re-reading current state from IndexedDB each time (rendering is async; a newer render wins over a slower one). Feature views live in their own modules (`nutrition-view.js`, see [nutrition.md](nutrition.md); `weight-view.js`, see [weight.md](weight.md)); `app.js` forwards taps on any `[data-act]` element in the view to them (acts starting `w-` go to the weight view, the rest to nutrition). `ui.js` holds shared helpers: `esc()`, number formats, ids, and the general bottom sheet.
 
 ## Tabs
 
@@ -15,7 +15,7 @@ The bottom bar has three tabs. The current tab lives in the URL hash (`#today`, 
 
 | Tab | What it shows now |
 |-----|-------------------|
-| Today | Greeting by time of day, the date, Calories and Protein tiles (left of today's targets, see [nutrition.md](nutrition.md#today-tab)), a "Log food" button, and a "Next workout" card linking to Workouts |
+| Today | Greeting by time of day, the date, Calories and Protein tiles plus smaller Carbs and Fat tiles (left of today's targets, see [nutrition.md](nutrition.md#today-tab)), a "Log food" button, the weight card (7-day average, progress to goal, chart; see [weight.md](weight.md)), and a "Next workout" card linking to Workouts |
 | Nutrition | The day's food log against the targets, with the profile, add-food and my-foods sheets. See [nutrition.md](nutrition.md) |
 | Workouts | Placeholder card describing what is coming (plans, set logging, records, volume) |
 

@@ -19,6 +19,13 @@ export const PROTEIN_RANGE = [1.6, 2.2]; // g per kg body weight
 export const DEFAULT_PROTEIN_PER_KG = 1.8;
 export const KCAL_PER_KG = 7700; // energy in 1 kg of body fat, roughly
 
+// Energy per gram, for turning a share of calories into grams and back.
+export const KCAL_PER_G = { protein: 4, carbs: 4, fat: 9 };
+// Carbs and fat are set as a share of calories ("pct") or as grams ("g").
+// Without a saved choice: fat 30 % of calories, carbs the rest after protein.
+export const DEFAULT_FAT_PCT = 30;
+export const MACRO_LIMITS = { pct: [0, 100], carbG: [0, 1000], fatG: [0, 400] };
+
 export const MEALS = [
   { id: "breakfast", label: "Breakfast" },
   { id: "lunch", label: "Lunch" },
@@ -52,10 +59,12 @@ export function profileProblems(p, today = new Date()) {
   if (!(Number.isFinite(p.deficit) && p.deficit >= 0 && p.deficit <= MAX_DEFICIT)) out.push(`Daily deficit must be between 0 and ${MAX_DEFICIT} kcal.`);
   if (!(p.proteinPerKg >= PROTEIN_RANGE[0] && p.proteinPerKg <= PROTEIN_RANGE[1])) out.push(`Protein must be between ${PROTEIN_RANGE[0]} and ${PROTEIN_RANGE[1]} g per kg.`);
   if (p.targetDate && !/^\d{4}-\d{2}-\d{2}$/.test(p.targetDate)) out.push("Target date is not a date.");
+  out.push(...macroProblems(p));
   return out;
 }
 
-// { bmr, tdee, kcal, deficit, floored, floor, protein } for a valid profile.
+// { bmr, tdee, kcal, deficit, floored, floor, protein, macros } for a valid profile
+// (macros: carb and fat targets, see macroTargets).
 // deficit is what the target actually takes off maintenance (smaller than
 // the profile's when the floor kicks in).
 export function targets(p, today = new Date()) {
@@ -65,6 +74,7 @@ export function targets(p, today = new Date()) {
   const wanted = tdee - p.deficit;
   // Round first, then floor, so the target shown is never under the floor.
   const kcal = Math.max(floor, Math.round(wanted / 10) * 10);
+  const protein = Math.round(p.weightKg * p.proteinPerKg);
   return {
     bmr: Math.round(rest),
     tdee: Math.round(tdee),
@@ -72,7 +82,71 @@ export function targets(p, today = new Date()) {
     deficit: Math.max(0, Math.round(tdee) - kcal),
     floored: kcal === floor && wanted < floor,
     floor,
-    protein: Math.round(p.weightKg * p.proteinPerKg),
+    protein,
+    macros: macroTargets(p, { kcal, protein }),
+  };
+}
+
+// ---------- carbs and fat ----------
+
+// Grams of a macro that make up `pct` percent of `kcal`.
+export function gramsFromPct(kcal, pct, macro) {
+  return kcal > 0 ? (kcal * pct) / 100 / KCAL_PER_G[macro] : 0;
+}
+
+// Percent of `kcal` that `grams` of a macro supply.
+export function pctFromGrams(kcal, grams, macro) {
+  return kcal > 0 ? ((grams * KCAL_PER_G[macro]) / kcal) * 100 : 0;
+}
+
+const inRange = (v, [lo, hi]) => Number.isFinite(v) && v >= lo && v <= hi;
+const given = (v) => v !== undefined && v !== null;
+
+export function macroProblems(p) {
+  const out = [];
+  if (given(p.macroMode) && p.macroMode !== "pct" && p.macroMode !== "g") out.push("Pick how carbs and fat are set.");
+  if (p.macroMode === "g") {
+    if (!inRange(p.carbG, MACRO_LIMITS.carbG)) out.push(`Carbs must be between 0 and ${MACRO_LIMITS.carbG[1]} g.`);
+    if (!inRange(p.fatG, MACRO_LIMITS.fatG)) out.push(`Fat must be between 0 and ${MACRO_LIMITS.fatG[1]} g.`);
+  } else if (p.macroMode === "pct") {
+    if (!inRange(p.carbPct, MACRO_LIMITS.pct)) out.push("Carbs must be between 0 and 100 % of calories.");
+    if (!inRange(p.fatPct, MACRO_LIMITS.pct)) out.push("Fat must be between 0 and 100 % of calories.");
+    else if (Number.isFinite(p.carbPct) && p.carbPct + p.fatPct > 100) out.push("Carbs and fat cannot add up to more than 100 % of calories.");
+  }
+  return out;
+}
+
+// Carb and fat targets for a profile, given its calorie and protein targets:
+// { mode, carbs, fat (grams, whole), carbPct, fatPct, proteinPct, totalPct (whole percents) }.
+// In "pct" mode the grams follow the calorie target; in "g" mode the grams
+// stay put and the percents follow. With no saved choice, fat is 30 % and
+// carbs take what protein and fat leave (never below zero).
+export function macroTargets(p, t) {
+  const proteinPct = pctFromGrams(t.kcal, t.protein, "protein");
+  let mode = p.macroMode, carbs, fat;
+  if (mode === "g") {
+    carbs = p.carbG; fat = p.fatG;
+  } else {
+    let carbPct = p.carbPct, fatPct = p.fatPct;
+    if (mode !== "pct") {
+      mode = "auto";
+      fatPct = DEFAULT_FAT_PCT;
+      carbPct = Math.max(0, 100 - proteinPct - fatPct);
+    }
+    carbs = gramsFromPct(t.kcal, carbPct, "carbs");
+    fat = gramsFromPct(t.kcal, fatPct, "fat");
+  }
+  carbs = Math.round(carbs); fat = Math.round(fat);
+  const carbPct = pctFromGrams(t.kcal, carbs, "carbs");
+  const fatPct = pctFromGrams(t.kcal, fat, "fat");
+  return {
+    mode,
+    carbs,
+    fat,
+    carbPct: Math.round(carbPct),
+    fatPct: Math.round(fatPct),
+    proteinPct: Math.round(proteinPct),
+    totalPct: Math.round(carbPct + fatPct + proteinPct),
   };
 }
 

@@ -18,7 +18,7 @@ Calm off-white and deep green, built for one-handed use on a phone. All values a
 | `--ink`, `--muted` | Primary text; secondary text, labels and hints |
 | `--line` | Borders and dividers |
 | `--accent`, `--accent-ink`, `--accent-soft` | Primary buttons, the active tab, the brand dot; text on accent; soft accent fills |
-| `--protein` | Reserved for protein figures and charts (calories use the accent) |
+| `--protein`, `--carbs`, `--fat` | Protein, carb and fat figures and bars (calories use the accent) |
 | `--good`, `--bad` | Success and error messages |
 | `--warn`, `--warn-soft` | Warnings: the "Storage is unavailable" banner |
 
@@ -37,11 +37,12 @@ The system font stack at 16px. Screen titles (`h2`) 26px bold with tight trackin
 - **Button** (`.btn`, full width, 48px tall; `.ghost` for secondary) and **icon button** (`.icon-btn`, 40px).
 - **Bottom tabs** (`.tabs`): three equal columns, icon over label, active tab in the accent.
 - **Sheet** (`dialog` + `.sheet`): bottom sheet on a phone, centered card from 640px; `.facts` for label/value rows and `.msg` (`.good`/`.bad`) for the status line. The general sheet scrolls inside itself up to 92% of the screen height; `.sheet-head .grow` takes a long title between a back and a close button.
-- **Progress bar** (`.bar`): accent fill for calories, `.protein` for protein, `.over` turns it to the warning color past the target.
+- **Progress bar** (`.bar`): accent fill for calories, `.protein`, `.carbs` and `.fat` for those macros, `.goal` (good color) for progress to the goal weight, `.over` turns it to the warning color past the target.
 - **Day summary** (`.summary`, `.sum-row`, `.sum-big`, `.sum-left`, `.macros`) and **day navigation** (`.title-row`, `.day-nav`, `.day-label`).
 - **List rows** (`.entries` of `.entry` / `.result` buttons): name with a hint line on the left, kcal with protein on the right; `.add-btn` is the dashed add button under each meal.
 - **Forms** (`.form`, `.field`, `.seg` segmented radio, `.check` checkbox row, `.preview` live result box, `.btn.danger` for destructive actions, `.search`).
-- Text colors: `.protein-text`, `.over-text` (warn), `.good-text`, `.bad-text`, `.warn-text`.
+- **Weight chart** (`.chart`): inline SVG with `.grid` lines and `.tick` labels, `.dot-kg` weigh-in dots (muted), `.avg-line` the 7-day average (accent), `.goal-line` dashed (good), `.plan-line` dotted (muted); `.legend` keys under it; `.range` is the 1M / 3M / All toggle (`aria-pressed`).
+- Text colors: `.protein-text`, `.carbs-text`, `.fat-text`, `.over-text` (warn), `.good-text`, `.bad-text`, `.warn-text`.
 
 ## App icon
 

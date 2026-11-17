@@ -1,7 +1,7 @@
 // Targets maths. Every profile here is made up.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bmr, targets, projection, profileProblems, ageFrom, kgToLb, dayKey, shiftDay, sumEntries, byMeal, entryNutrients, mealForHour, KCAL_FLOOR, DEFAULT_DEFICIT } from "../nutrition.js";
+import { bmr, targets, projection, profileProblems, ageFrom, kgToLb, dayKey, shiftDay, sumEntries, byMeal, entryNutrients, mealForHour, KCAL_FLOOR, DEFAULT_DEFICIT, gramsFromPct, pctFromGrams } from "../nutrition.js";
 
 const TODAY = new Date(2026, 0, 15); // 15 Jan 2026, local time
 const man = { sex: "male", birthYear: 1996, heightCm: 180, weightKg: 80, activity: "moderate", goalKg: 75, targetDate: "2026-06-30", deficit: 500, proteinPerKg: 1.8 };
@@ -119,4 +119,70 @@ test("meal suggestion by hour", () => {
   assert.equal(mealForHour(16), "snacks");
   assert.equal(mealForHour(19), "dinner");
   assert.equal(mealForHour(23), "snacks");
+});
+
+// ---------- carbs and fat ----------
+
+test("percent and grams convert both ways at 4 / 4 / 9 kcal per gram", () => {
+  assert.equal(gramsFromPct(2000, 50, "carbs"), 250);
+  assert.equal(gramsFromPct(2000, 30, "fat"), 2000 * 0.3 / 9);
+  assert.equal(pctFromGrams(2000, 250, "carbs"), 50);
+  assert.equal(pctFromGrams(1800, 60, "fat"), 30);
+  assert.equal(pctFromGrams(2000, 150, "protein"), 30);
+  assert.equal(pctFromGrams(0, 100, "carbs"), 0);
+  assert.equal(gramsFromPct(0, 50, "carbs"), 0);
+  // Round trip.
+  assert.ok(Math.abs(pctFromGrams(2350, gramsFromPct(2350, 27, "fat"), "fat") - 27) < 1e-9);
+});
+
+test("default macros: fat 30 %, carbs the rest after protein", () => {
+  const m = targets(man, TODAY).macros; // 2260 kcal, 144 g protein = 25.5 %
+  assert.equal(m.mode, "auto");
+  assert.equal(m.fat, Math.round(2260 * 0.3 / 9)); // 75
+  // Carbs fill what is left: 2260 - 678 (fat) - 576 (protein) = 1006 kcal, about 251.5 g.
+  assert.ok(Math.abs(m.carbs - 1006 / 4) <= 0.5);
+  assert.equal(m.fatPct, 30);
+  assert.equal(m.proteinPct, 25);
+  assert.ok(Math.abs(m.totalPct - 100) <= 1);
+});
+
+test("percent mode: grams follow the calorie target", () => {
+  const p = { ...man, macroMode: "pct", carbPct: 50, fatPct: 30 };
+  const a = targets(p, TODAY).macros;
+  assert.equal(a.carbs, Math.round(2260 * 0.5 / 4)); // 283 (282.5 rounds up)
+  assert.equal(a.fat, Math.round(2260 * 0.3 / 9));
+  assert.equal(a.carbPct, 50);
+  // A bigger deficit lowers the calorie target, and the grams with it.
+  const b = targets({ ...p, deficit: 800 }, TODAY);
+  assert.equal(b.macros.carbs, Math.round(b.kcal * 0.5 / 4));
+  assert.ok(b.macros.carbs < a.carbs);
+  assert.equal(b.macros.carbPct, 50);
+});
+
+test("grams mode: grams stay put and the percents follow", () => {
+  const p = { ...man, macroMode: "g", carbG: 200, fatG: 70 };
+  const a = targets(p, TODAY).macros;
+  assert.equal(a.carbs, 200);
+  assert.equal(a.fat, 70);
+  assert.equal(a.carbPct, Math.round(800 / 2260 * 100)); // 35
+  assert.equal(a.fatPct, Math.round(630 / 2260 * 100)); // 28
+  const b = targets({ ...p, deficit: 800 }, TODAY).macros;
+  assert.equal(b.carbs, 200);
+  assert.ok(b.carbPct > a.carbPct);
+});
+
+test("totalPct shows when protein, carbs and fat do not add up to the calories", () => {
+  assert.equal(targets({ ...man, macroMode: "pct", carbPct: 50, fatPct: 30 }, TODAY).macros.totalPct, 105);
+});
+
+test("macro settings are validated", () => {
+  const ok = (extra) => profileProblems({ ...man, ...extra }, TODAY);
+  assert.deepEqual(ok({}), []);
+  assert.deepEqual(ok({ macroMode: null }), []);
+  assert.deepEqual(ok({ macroMode: "pct", carbPct: 40, fatPct: 30 }), []);
+  assert.deepEqual(ok({ macroMode: "g", carbG: 150, fatG: 60 }), []);
+  assert.match(ok({ macroMode: "pct", carbPct: 80, fatPct: 30 })[0], /more than 100/);
+  assert.match(ok({ macroMode: "pct", carbPct: null, fatPct: 30 })[0], /Carbs/);
+  assert.match(ok({ macroMode: "g", carbG: 150, fatG: 500 })[0], /Fat must be between 0 and 400/);
+  assert.match(ok({ macroMode: "other" })[0], /Pick how/);
 });
