@@ -13,7 +13,7 @@ GitHub Pages, published by the `Pages` GitHub Actions workflow (`.github/workflo
 
 ## CI and build
 
-No compile step. The workflow's build job runs on every pull request and every push to `main`: the unit tests, the fast check, then it copies an explicit list of app files (`index.html`, the JS modules, `styles.css`, `sw.js`, `manifest.webmanifest`, `icons/`, and `foods/` with the food tables) into `_site/` and uploads it. Docs, tests, scripts and repo tooling are not published.
+No compile step. The workflow's build job runs on every pull request and every push to `main`: the unit tests, the fast check, then it copies an explicit list of app files (`index.html`, the JS modules (including `sync.js` and `sync-view.js`), `styles.css`, `sw.js`, `manifest.webmanifest`, `icons/`, and `foods/` with the food tables) into `_site/` and uploads it. Docs, tests, scripts and repo tooling are not published.
 
 A merge to `main` is the release: the deploy job publishes that artifact and the site updates within a minute or two. A manual run (`workflow_dispatch`) redeploys main. Pull requests never deploy.
 
@@ -23,6 +23,7 @@ The service worker (`sw.js`) caches the app shell on install and then serves eve
 
 - The shell includes the food tables, so food search works offline after the first online open (install downloads about 1 MB once).
 - An installed app picks up new code the next time it opens online; no cache-name bump is needed for ordinary changes.
+- Only this site's files go through the service worker: sync's calls to `api.github.com` always go to the network (and fail offline, which the Sync section reports).
 - Offline, it serves the last cached copy; an uncached page navigation falls back to `index.html`, any other uncached file fails as a network error.
 - Changing the cache name (`CACHE` in `sw.js`) makes the next activation delete every older cache. Do that only when old cached files must be dropped, for example after removing or renaming a shell file.
 

@@ -156,6 +156,10 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .msg { min-height: 1.5em; margin: 8px 0 0; font-weight: 600; }
 .msg.good { color: var(--good); }
 .msg.bad { color: var(--bad); }
+.sheet .msg:empty { min-height: 0; margin: 0; }
+.sync { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.sync h3 { margin: 0 0 6px; font-size: 18px; }
+.sync .hint { margin: 0 0 12px; }
 
 
 /* ---------- nutrition ---------- */
@@ -245,7 +249,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-radius: 6px; }
 
 /* ---------- forms (sheets) ---------- */
-#panel-dialog .sheet { max-height: 92dvh; overflow-y: auto; }
+#panel-dialog .sheet, #data-dialog .sheet { max-height: 92dvh; overflow-y: auto; }
 .sheet-head .grow { flex: 1; margin: 0 8px; font-size: 19px; overflow-wrap: anywhere; }
 .form { display: grid; gap: 14px; }
 .form .grid2 { gap: 12px; }

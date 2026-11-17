@@ -7,7 +7,7 @@ status: current
 
 # Data Flow
 
-All user data lives in the browser, in one IndexedDB database. Nothing is sent anywhere; the only way data leaves the device is a backup file the owner exports.
+All user data lives in the browser, in one IndexedDB database. It leaves the device only as a backup file the owner exports, or as the same file synced to the owner's private GitHub repo when they turn sync on ([sync.md](sync.md)).
 
 ## Store
 
@@ -57,3 +57,7 @@ The module exposes `get`, `getAll`, `getByIndex`, `put`, `putMany` (several reco
 - Import: `parseBackup()` against `storeNames()` and the key paths `db.js` exports (every record must carry its store's key), a confirm prompt, then `replaceAll()`. The replace is one transaction, so a failure part way (for example a record IndexedDB rejects; `replaceAll()` aborts the transaction) leaves the stored data untouched. Stores the file does not mention are left as they are. `lastImportAt` is set afterwards (best effort: a failure there does not undo the import).
 
 An older backup (lower `schema`) is accepted as is today: a schema 1 file only has `meta`, so importing it replaces `meta` (including any saved profile) and leaves the food log, my foods and weigh-ins as they are (a schema 2 file has no weigh-ins and a schema 3 file no workouts, so it leaves those as they are); once a later schema changes a record shape, `parseBackup` is where old files get migrated.
+
+## Device-only store
+
+A second database, `genki-device` (one store, `kv`, records `{ key, value }`), holds what belongs to this device and must never travel: `syncToken` (the GitHub token), `syncSha` (the version of `app/latest.json` this device last wrote or restored; set means linked), `lastSyncedAt`, `lastSyncError`. It is not part of `dumpAll()` or `replaceAll()`, so it is never in a backup, an export or the synced file, and an import or restore leaves it alone. `db.js` exposes `getDevice`, `setDevice` and `delDevice`. It has its own version (1) and needs no backup `SCHEMA` bump when it changes, since backups never carry it.

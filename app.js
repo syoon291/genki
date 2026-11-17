@@ -1,11 +1,13 @@
 // genki app shell: three tabs (Today / Nutrition / Workouts) rendered into
 // (Today: the nutrition tiles, the weight card from weight-view.js and the
 // next-workout card from workouts-view.js)
-// <main id="view">, and the Data & backup sheet (JSON export/import).
+// <main id="view">, and the Data & backup sheet (JSON export/import, and the
+// Sync section from sync-view.js).
 // The tab is kept in the URL hash so a reload stays where you were.
 import * as db from "./db.js";
 import { buildBackup, backupFileName, parseBackup, countRecords } from "./backup.js";
 import { esc, initPanel } from "./ui.js";
+import { syncSection, handleSyncAct, handleSyncSubmit, setSyncHooks, clearSyncNote, autoSync } from "./sync-view.js";
 import { nutritionView, todayTiles, handleViewClick, setRerender } from "./nutrition-view.js";
 import { weightCard, handleWeightClick, setWeightRerender } from "./weight-view.js";
 import { workoutsView, nextWorkoutCard, handleLiftClick, handleLiftInput, setLiftRerender, initRestTimer } from "./workouts-view.js";
@@ -111,7 +113,7 @@ async function renderSheet(message = "", tone = "") {
       <h2 id="data-title">Data &amp; backup</h2>
       <button type="button" class="icon-btn" data-act="close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
-    <p class="sub">Everything genki stores stays in this browser on this device. Export a backup file to keep a copy or move to another device.</p>
+    <p class="sub">Everything genki stores stays in this browser on this device unless you turn on Sync below. Export a backup file to keep a copy or move to another device.</p>
     <dl class="facts">
       <div><dt>Records stored</dt><dd>${total}</dd></div>
       <div><dt>Last export</dt><dd>${esc(fmtDate(lastExport))}</dd></div>
@@ -122,7 +124,8 @@ async function renderSheet(message = "", tone = "") {
       <button type="button" class="btn ghost" data-act="import">Import backup…</button>
     </div>
     <p class="hint">Importing replaces what is stored here with the backup's contents.</p>
-    <p class="msg ${tone}" role="status">${esc(message)}</p>`;
+    <p class="msg ${tone}" role="status">${esc(message)}</p>
+    ${await syncSection()}`;
 }
 
 async function doExport() {
@@ -156,7 +159,10 @@ async function doImport(file) {
   render();
 }
 
+setSyncHooks({ rerender: () => (dialog.open ? renderSheet().catch((e) => console.warn("genki: could not redraw the sheet", e)) : undefined), restored: () => render() });
+
 $("#data-btn").addEventListener("click", async () => {
+  clearSyncNote();
   await renderSheet();
   if (!dialog.open) dialog.showModal();
 });
@@ -168,6 +174,11 @@ sheet.addEventListener("click", async (e) => {
     try { await doExport(); } catch (err) { await renderSheet(`Export failed: ${err.message}`, "bad"); }
   }
   if (act === "import") fileInput.click();
+  if (act) handleSyncAct(act);
+});
+sheet.addEventListener("submit", (e) => {
+  e.preventDefault();
+  handleSyncSubmit(e.target);
 });
 
 // Tap on the backdrop closes the sheet.
@@ -189,6 +200,7 @@ try {
   storeError = e.message;
 }
 render();
+if (!storeError) autoSync();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});
