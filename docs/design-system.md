@@ -20,6 +20,7 @@ Calm off-white and deep green, built for one-handed use on a phone. All values a
 | `--accent`, `--accent-ink`, `--accent-soft` | Primary buttons, the active tab, the brand dot; text on accent; soft accent fills |
 | `--protein`, `--carbs`, `--fat` | Protein, carb and fat figures and bars (calories use the accent) |
 | `--good`, `--bad` | Success and error messages |
+| `--chart-2` | Secondary chart bars (outside the volume band, past weeks) |
 | `--warn`, `--warn-soft` | Warnings: the "Storage is unavailable" banner |
 
 Dark mode follows the system (`prefers-color-scheme: dark`) and redefines the same tokens. `index.html` sets a matching `theme-color` per scheme; `manifest.webmanifest` uses the light background.
@@ -42,6 +43,7 @@ The system font stack at 16px. Screen titles (`h2`) 26px bold with tight trackin
 - **List rows** (`.entries` of `.entry` / `.result` buttons): name with a hint line on the left, kcal with protein on the right; `.add-btn` is the dashed add button under each meal.
 - **Forms** (`.form`, `.field`, `.seg` segmented radio, `.check` checkbox row, `.preview` live result box, `.btn.danger` for destructive actions, `.search`).
 - **Weight chart** (`.chart`): inline SVG with `.grid` lines and `.tick` labels, `.dot-kg` weigh-in dots (muted), `.avg-line` the 7-day average (accent), `.goal-line` dashed (good), `.plan-line` dotted (muted); `.legend` keys under it; `.range` is the 1M / 3M / All toggle (`aria-pressed`).
+- **Workouts** (`.lift-*`): `.lift-ex` exercise cards with `.lift-tip` (last / try) and `.lift-set` rows (set number, weight, reps, RIR inputs, `.lift-check` done button; `.done` tints the row), `.lift-pill` small accent badge, `.lift-kpis` number grid, `.lift-list` dashed list, `.lift-plan-day`; bar charts use `.lift-in` (accent) / `.lift-out` (`--chart-2`) / `.lift-band` (the 10-20 band); the trend reuses `.avg-line` and a dashed `.goal-line`. **Rest timer** (`.rest-timer`): a dark bar fixed above the tabs with a draining progress line. **Visually hidden** (`.visually-hidden`) for labels only screen readers need. `.btn:disabled` dims a button.
 - Text colors: `.protein-text`, `.carbs-text`, `.fat-text`, `.over-text` (warn), `.good-text`, `.bad-text`, `.warn-text`.
 
 ## App icon
