@@ -1,0 +1,1 @@
+{"date": "2026-11-17", "project": "genki", "summary": "Scaffolded genki: a no-build PWA shell (Today / Nutrition / Workouts tabs) with an IndexedDB store and JSON backup export/import, plus CI and a GitHub Pages deploy.", "pr": 1, "why": "Foundation the nutrition and workout features build on."}
