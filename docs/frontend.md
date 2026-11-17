@@ -32,6 +32,8 @@ The header's download button opens a `<dialog>` (a bottom sheet on a phone, cent
 - **Export backup (JSON)** records the export time, then downloads `genki-backup-<date>.json` with every store's records.
 - **Import backup...** picks a file, validates it (see [data-flow.md](data-flow.md#backup-file)), shows the error in the sheet if it is not a valid backup, otherwise asks for confirmation and replaces the stored data with the backup's.
 
+Below them is the **Sync** section (`sync-view.js`, see [sync.md](sync.md)): a token field until a token is saved, then the last sync time and Sync now, Restore from genki-data... and Remove token, with its own status line. The sheet scrolls inside itself when it is taller than the screen.
+
 Tapping the backdrop or the close button closes the sheet. Messages appear in a status line inside the sheet.
 
 ## Conventions

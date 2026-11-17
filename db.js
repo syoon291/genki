@@ -153,3 +153,49 @@ export async function replaceAll(stores) {
   }
   return finished;
 }
+
+// ---------- device-only store ----------
+// A second, separate database for things that belong to this device and must
+// never travel: the sync token and sync state. It is not part of dumpAll() or
+// replaceAll(), so it never lands in a backup, an export, a synced file, and a
+// restore or import never overwrites it.
+
+export const DEVICE_DB = "genki-device";
+let devicePromise;
+
+function openDevice() {
+  if (devicePromise) return devicePromise;
+  devicePromise = new Promise((resolve, reject) => {
+    if (!("indexedDB" in globalThis)) { reject(new Error("This browser has no IndexedDB.")); return; }
+    const req = indexedDB.open(DEVICE_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("kv", { keyPath: "key" });
+    req.onsuccess = () => {
+      const db = req.result;
+      db.onversionchange = () => { db.close(); devicePromise = undefined; };
+      resolve(db);
+    };
+    req.onerror = () => reject(req.error);
+  });
+  devicePromise.catch(() => { devicePromise = undefined; });
+  return devicePromise;
+}
+
+export async function getDevice(key, fallback) {
+  const db = await openDevice();
+  const row = await result(db.transaction("kv").objectStore("kv").get(key));
+  return row ? row.value : fallback;
+}
+
+export async function setDevice(key, value) {
+  const db = await openDevice();
+  const tx = db.transaction("kv", "readwrite");
+  tx.objectStore("kv").put({ key, value });
+  return done(tx);
+}
+
+export async function delDevice(key) {
+  const db = await openDevice();
+  const tx = db.transaction("kv", "readwrite");
+  tx.objectStore("kv").delete(key);
+  return done(tx);
+}
