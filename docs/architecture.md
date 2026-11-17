@@ -12,21 +12,22 @@ status: current
 
 genki is a personal nutrition and workout tracker: an installable, offline-capable web app (PWA) built for a phone. It logs food against calorie and protein targets, tracks weigh-ins, and logs workouts against a plan, with one shared on-device store. There is no server, no account and no build step: the repo is the website, served by GitHub Pages. Personal data never enters this public repo; it stays in the browser's IndexedDB and in backup files the owner keeps.
 
-The product plan and its decisions live in the owner's knowledge hub, not here. Built so far: the app shell (three tabs), the store, and JSON backup. Nutrition and workout features arrive in later phases.
+The product plan and its decisions live in the owner's knowledge hub, not here. Built so far: the app shell (three tabs), the store, JSON backup, and nutrition (profile, calorie and protein targets, the food log with search over bundled Japanese and US food tables, quick add and my foods). Weigh-ins and workouts arrive in later phases.
 
 ## System Overview
 
 | Surface | Path | Role |
 |---------|------|------|
 | Page shell | `index.html` | Header (brand, Data & backup button), the `<main id="view">` the app renders into, the three-tab bottom bar, the backup sheet `<dialog>`, PWA meta tags |
-| App logic | `app.js` | Tab routing (URL hash), view rendering, the Data & backup sheet. See [frontend.md](frontend.md) |
+| App logic | `app.js`, `ui.js` | Tab routing (URL hash), view rendering, the Data & backup sheet; shared UI helpers and the general sheet. See [frontend.md](frontend.md) |
+| Nutrition | `nutrition.js`, `foods.js`, `nutrition-view.js`, `foods/` | Targets maths and food search (pure, unit-tested), the Nutrition tab and its sheets, the bundled food tables. See [nutrition.md](nutrition.md) |
 | Store | `db.js` | IndexedDB wrapper: versioned upgrades, get/put/delete, dump and atomic replace. See [data-flow.md](data-flow.md) |
 | Backup format | `backup.js` | Builds and validates the JSON export file; pure functions, unit-tested. See [data-flow.md](data-flow.md) |
 | Styles | `styles.css` | Color tokens (light + dark), layout, components. See [design-system.md](design-system.md) |
 | Offline + install | `sw.js`, `manifest.webmanifest`, `icons/` | Service worker caches the app for offline use; the manifest and icons make it installable. See [deployment.md](deployment.md) |
-| Tests and checks | `tests/`, `scripts/check.mjs`, `package.json` | Unit tests (Node's built-in runner) and a fast repo check; `package.json` has no dependencies and only marks the scripts as ES modules. See [local-dev.md](local-dev.md) |
+| Tests and checks | `tests/`, `scripts/`, `package.json` | Unit tests (Node's built-in runner), a fast repo check, and the food-table build script; `package.json` has no dependencies and only marks the scripts as ES modules. See [local-dev.md](local-dev.md) |
 
-How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), which imports `db.js` and `backup.js`. On start, `app.js` opens the IndexedDB database (creating or upgrading it), renders the tab named in the URL hash, and registers `sw.js` when served over https.
+How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), which imports `db.js`, `backup.js`, `ui.js` and `nutrition-view.js` (which imports `nutrition.js` and `foods.js`, and fetches the food tables from `foods/` on first use). On start, `app.js` opens the IndexedDB database (creating or upgrading it), renders the tab named in the URL hash, and registers `sw.js` when served over https.
 
 ## Repository Layout
 
@@ -34,6 +35,11 @@ How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), wh
 .
 ├── index.html             page shell + PWA meta
 ├── app.js                 tabs, views, backup sheet
+├── ui.js                  shared UI helpers, general sheet
+├── nutrition.js           targets maths (pure, tested)
+├── foods.js               food search + units (pure, tested)
+├── nutrition-view.js      Nutrition tab, Today tiles, food sheets
+├── foods/                 bundled food tables (built, committed)
 ├── db.js                  IndexedDB store
 ├── backup.js              export/import format (pure, tested)
 ├── styles.css             design tokens + components
@@ -41,7 +47,7 @@ How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), wh
 ├── manifest.webmanifest   install metadata
 ├── icons/                 app icons (svg + png sizes)
 ├── tests/                 unit tests (node --test)
-├── scripts/check.mjs      fast repo check
+├── scripts/               fast repo check, food-table build
 ├── package.json           test scripts only, no dependencies
 ├── .github/workflows/     CI + Pages deploy
 ├── docs/                  this documentation
@@ -60,7 +66,8 @@ How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), wh
 
 | Doc | Scope |
 |-----|-------|
-| [Frontend](frontend.md) | Tabs, views, the Data & backup sheet |
+| [Frontend](frontend.md) | Tabs, views, the general sheet, the Data & backup sheet |
+| [Nutrition](nutrition.md) | Targets, the food log, adding food, the bundled food tables and their sources |
 | [Data Flow](data-flow.md) | The IndexedDB store, upgrades, the backup file format, export and import |
 | [Design System](design-system.md) | Color tokens, type, components, voice of the copy |
 | [Local Development](local-dev.md) | Running it locally, tests, gotchas (exact commands: `.claude/test-manifest.json`) |

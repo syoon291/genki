@@ -5,7 +5,7 @@ A personal nutrition and workout tracker for the phone, aimed at cutting weight 
 ## What it does
 
 - Today at a glance: calories and protein left, and the next workout.
-- Nutrition: daily calorie and protein targets from your profile, and a food log (in progress).
+- Nutrition: daily calorie and protein targets from your profile, and a food log by meal with quick add, saved foods and built-in Japanese and US food tables.
 - Workouts: plan-based lifting log with records and volume (in progress).
 - Works offline, installs to the home screen, and backs up to a JSON file you keep.
 
