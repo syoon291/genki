@@ -1,0 +1,183 @@
+// genki app shell: three tabs (Today / Nutrition / Workouts) rendered into
+// <main id="view">, and the Data & backup sheet (JSON export/import).
+// The tab is kept in the URL hash so a reload stays where you were.
+import * as db from "./db.js";
+import { buildBackup, backupFileName, parseBackup, countRecords } from "./backup.js";
+
+const TABS = ["today", "nutrition", "workouts"];
+const $ = (sel, root = document) => root.querySelector(sel);
+const view = $("#view");
+const dialog = $("#data-dialog");
+const sheet = $("#data-sheet");
+const fileInput = $("#import-file");
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+let storeError = null;
+
+// ---------- tabs ----------
+
+function currentTab() {
+  const t = location.hash.slice(1);
+  return TABS.includes(t) ? t : "today";
+}
+
+function greeting(d = new Date()) {
+  const h = d.getHours();
+  if (h < 5) return "Late night";
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+const RENDER = {
+  today: () => `
+    <h2>${greeting()}</h2>
+    <p class="sub">${esc(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }))}</p>
+    <div class="grid2">
+      <div class="card stat"><span class="stat-label">Calories left</span><span class="stat-value">--</span><span class="hint">Set up your profile in Nutrition</span></div>
+      <div class="card stat"><span class="stat-label">Protein left</span><span class="stat-value">--</span><span class="hint">Targets come from your profile</span></div>
+    </div>
+    <h3>Next workout</h3>
+    <div class="card empty"><p>No plan picked yet.</p><a class="btn ghost" href="#workouts">Go to Workouts</a></div>`,
+  nutrition: () => `
+    <h2>Nutrition</h2>
+    <p class="sub">Calories and protein against your daily targets.</p>
+    <div class="card empty">
+      <p><strong>Food log is on the way.</strong></p>
+      <p class="muted small">Next up: your profile and daily targets, a food log with quick-add and saved foods, and weigh-ins with a 7-day trend.</p>
+    </div>`,
+  workouts: () => `
+    <h2>Workouts</h2>
+    <p class="sub">Your plan, your sets, your records.</p>
+    <div class="card empty">
+      <p><strong>Workout log is on the way.</strong></p>
+      <p class="muted small">Next up: plan templates, set logging pre-filled from last time, personal records and volume charts.</p>
+    </div>`,
+};
+
+function render() {
+  const tab = currentTab();
+  for (const b of document.querySelectorAll(".tabs button")) {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle("on", on);
+    if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  }
+  const banner = storeError ? `<div class="card warn-card" role="alert"><strong>Storage is unavailable.</strong> <span class="small">${esc(storeError)} Nothing you enter will be saved.</span></div>` : "";
+  view.innerHTML = banner + RENDER[tab]();
+}
+
+document.querySelector(".tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-tab]");
+  if (!b) return;
+  if (location.hash !== `#${b.dataset.tab}`) location.hash = b.dataset.tab;
+  else render();
+  window.scrollTo(0, 0);
+});
+window.addEventListener("hashchange", () => { render(); view.focus({ preventScroll: true }); });
+
+// ---------- data & backup ----------
+
+function fmtDate(iso) {
+  if (!iso) return "never";
+  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+async function renderSheet(message = "", tone = "") {
+  let counts = {}, lastExport = null, lastImport = null;
+  try {
+    counts = countRecords(await db.dumpAll());
+    lastExport = await db.getMeta("lastExportAt", null);
+    lastImport = await db.getMeta("lastImportAt", null);
+  } catch (e) {
+    message = message || `Storage is unavailable: ${e.message}`;
+    tone = "bad";
+  }
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  sheet.innerHTML = `
+    <div class="sheet-head">
+      <h2 id="data-title">Data &amp; backup</h2>
+      <button type="button" class="icon-btn" data-act="close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <p class="sub">Everything genki stores stays in this browser on this device. Export a backup file to keep a copy or move to another device.</p>
+    <dl class="facts">
+      <div><dt>Records stored</dt><dd>${total}</dd></div>
+      <div><dt>Last export</dt><dd>${esc(fmtDate(lastExport))}</dd></div>
+      <div><dt>Last import</dt><dd>${esc(fmtDate(lastImport))}</dd></div>
+    </dl>
+    <div class="stack">
+      <button type="button" class="btn" data-act="export">Export backup (JSON)</button>
+      <button type="button" class="btn ghost" data-act="import">Import backup…</button>
+    </div>
+    <p class="hint">Importing replaces what is stored here with the backup's contents.</p>
+    <p class="msg ${tone}" role="status">${esc(message)}</p>`;
+}
+
+async function doExport() {
+  const now = new Date();
+  const backup = buildBackup(await db.dumpAll(), now);
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement("a"), { href: url, download: backupFileName(now) });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  await db.setMeta("lastExportAt", now.toISOString());
+  await renderSheet("Backup downloaded.", "good");
+}
+
+async function doImport(file) {
+  const parsed = parseBackup(await file.text(), await db.storeNames(), db.KEY_PATHS);
+  if (!parsed.ok) { await renderSheet(parsed.error, "bad"); return; }
+  const counts = countRecords(parsed.backup.stores);
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const when = parsed.backup.exportedAt ? ` from ${fmtDate(parsed.backup.exportedAt)}` : "";
+  if (!confirm(`Replace the data on this device with the backup${when} (${total} records)? This cannot be undone.`)) {
+    await renderSheet("Import cancelled. Nothing changed.");
+    return;
+  }
+  await db.replaceAll(parsed.backup.stores);
+  // The data is replaced by now: a failure to stamp the time must not report "Nothing changed".
+  try { await db.setMeta("lastImportAt", new Date().toISOString()); } catch {}
+  await renderSheet(`Imported ${total} records.`, "good");
+  render();
+}
+
+$("#data-btn").addEventListener("click", async () => {
+  await renderSheet();
+  if (!dialog.open) dialog.showModal();
+});
+
+sheet.addEventListener("click", async (e) => {
+  const act = e.target.closest("[data-act]")?.dataset.act;
+  if (act === "close") dialog.close();
+  if (act === "export") {
+    try { await doExport(); } catch (err) { await renderSheet(`Export failed: ${err.message}`, "bad"); }
+  }
+  if (act === "import") fileInput.click();
+});
+
+// Tap on the backdrop closes the sheet.
+dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
+
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files[0];
+  fileInput.value = "";
+  if (!file) return;
+  try { await doImport(file); } catch (err) { await renderSheet(`Import failed: ${err.message}. Nothing changed.`, "bad"); }
+});
+
+// ---------- start ----------
+
+try {
+  await db.openDB();
+  if (!(await db.getMeta("createdAt", null))) await db.setMeta("createdAt", new Date().toISOString());
+} catch (e) {
+  storeError = e.message;
+}
+render();
+
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
