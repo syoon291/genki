@@ -1,0 +1,1 @@
+{"date": "2026-11-17", "project": "genki", "summary": "Workouts tab: Liftlog ported in (generated plan templates, set logging pre-filled from double progression, rest timer, PRs and volume charts) with a read-only import of Liftlog data from its localStorage or a backup file.", "pr": 4, "why": "Phase 4 of the genki plan; the website copy of Liftlog stays unchanged for now."}

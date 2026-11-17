@@ -1,5 +1,6 @@
 // genki app shell: three tabs (Today / Nutrition / Workouts) rendered into
-// (Today: the nutrition tiles plus the weight card from weight-view.js)
+// (Today: the nutrition tiles, the weight card from weight-view.js and the
+// next-workout card from workouts-view.js)
 // <main id="view">, and the Data & backup sheet (JSON export/import).
 // The tab is kept in the URL hash so a reload stays where you were.
 import * as db from "./db.js";
@@ -7,6 +8,7 @@ import { buildBackup, backupFileName, parseBackup, countRecords } from "./backup
 import { esc, initPanel } from "./ui.js";
 import { nutritionView, todayTiles, handleViewClick, setRerender } from "./nutrition-view.js";
 import { weightCard, handleWeightClick, setWeightRerender } from "./weight-view.js";
+import { workoutsView, nextWorkoutCard, handleLiftClick, handleLiftInput, setLiftRerender, initRestTimer } from "./workouts-view.js";
 
 const TABS = ["today", "nutrition", "workouts"];
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -39,16 +41,9 @@ const RENDER = {
     ${storeError ? "" : await todayTiles()}
     <a class="btn ghost log-link" href="#nutrition">Log food</a>
     ${storeError ? "" : await weightCard()}
-    <h3>Next workout</h3>
-    <div class="card empty"><p>No plan picked yet.</p><a class="btn ghost" href="#workouts">Go to Workouts</a></div>`,
+    ${storeError ? "" : await nextWorkoutCard()}`,
   nutrition: () => (storeError ? `<h2>Nutrition</h2>` : nutritionView()),
-  workouts: () => `
-    <h2>Workouts</h2>
-    <p class="sub">Your plan, your sets, your records.</p>
-    <div class="card empty">
-      <p><strong>Workout log is on the way.</strong></p>
-      <p class="muted small">Next up: plan templates, set logging pre-filled from last time, personal records and volume charts.</p>
-    </div>`,
+  workouts: () => (storeError ? `<h2>Workouts</h2>` : workoutsView()),
 };
 
 // Views read IndexedDB, so rendering is async; a newer render wins over a slower older one.
@@ -71,13 +66,18 @@ async function render() {
 
 setRerender(() => render());
 setWeightRerender(() => render());
+setLiftRerender(() => render());
 initPanel();
+initRestTimer();
 view.addEventListener("click", (e) => {
   const el = e.target.closest("[data-act]");
   if (!el || !view.contains(el)) return;
   const act = el.dataset.act;
-  (act.startsWith("w-") ? handleWeightClick(act, el) : handleViewClick(act, el)).catch((err) => alert(`That did not work: ${err.message}`));
+  const handler = act.startsWith("lift-") ? handleLiftClick : act.startsWith("w-") ? handleWeightClick : handleViewClick;
+  handler(act, el).catch((err) => alert(`That did not work: ${err.message}`));
 });
+// Typing in the workout set rows and picking from its selects.
+for (const type of ["input", "change"]) view.addEventListener(type, (e) => { handleLiftInput(e).catch((err) => alert(`That did not work: ${err.message}`)); });
 
 document.querySelector(".tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-tab]");
