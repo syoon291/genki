@@ -16,15 +16,26 @@ Calm off-white and deep green, built for one-handed use on a phone. All values a
 | `--bg` | Page background (soft green-tinted off-white; near-black green in dark mode) |
 | `--surface`, `--surface-2` | Cards and the sheet; secondary fills (ghost buttons, icon buttons) |
 | `--ink`, `--muted` | Primary text; secondary text, labels and hints |
-| `--line` | Borders and dividers (decorative) |
-| `--field-line` | Input and select borders, at least 3:1 against the page so a field's edge is visible |
+| `--line` | Card edges and dividers: at least 1.4:1 against the page and the card so a card's edge shows |
+| `--field-line` | Borders that outline a control (inputs, selects, the dashed add button, the set check, the danger button), at least 3:1 against every surface |
 | `--accent`, `--accent-ink`, `--accent-soft`, `--accent-deep` | Primary buttons, the active tab, the brand dot; text on accent; soft accent fills; accent text on a soft accent fill (`.lift-pill`) |
 | `--protein`, `--carbs`, `--fat` | Protein, carb and fat figures and bars (calories use the accent) |
 | `--good`, `--bad` | Success and error messages |
 | `--chart-2` | Secondary chart bars (outside the volume band, past weeks), 3:1 against the card |
 | `--warn`, `--warn-soft` | Warnings: the "Storage is unavailable" banner, over-target figures and bars |
 
-Text tokens meet 4.5:1 against the surfaces they sit on, and UI tokens (field borders, chart marks) 3:1, in both schemes. Check a new pairing before using it.
+Contrast floors, checked in CI by `scripts/contrast.mjs` (part of the fast check) against `--bg`, `--surface` and `--surface-2` in every theme:
+
+| Pairing | Standard | High contrast |
+|---------|----------|---------------|
+| `--ink`, `--muted` text | 7:1 | 10:1 |
+| Colored text (`--accent`, macros, `--good`, `--bad`, `--warn`), also as bar fills | 4.5:1 | 7:1 |
+| `--field-line`, `--chart-2` | 3:1 | 4.5:1 |
+| `--line` (against page and card) | 1.4:1 | 3:1 |
+
+Plus text on fills: `--accent-ink` on `--accent`, `--accent-deep` on `--accent-soft`, `--ink` on `--accent-soft` / `--warn-soft`, `--warn` on `--warn-soft`. Tune a token by changing its lightness, never its hue, and keep macro figures labelled in words (protein, carbs, fat) so color is never the only cue. A new color pairing gets a row in `scripts/contrast.mjs`.
+
+**High contrast** (`contrast.js`): a per-device setting in the Data & backup sheet (Match phone / On / Off; stored in localStorage, not in backups or sync). Match phone follows `prefers-contrast: more` (iOS Increase Contrast). When on, `<html data-contrast="more">` switches to the stronger token blocks under `:root[data-contrast="more"]`; the light and dark blocks set the same tokens so the dark one fully replaces the light one.
 
 Dark mode follows the system (`prefers-color-scheme: dark`) and redefines the same tokens. `index.html` sets a matching `theme-color` per scheme; `manifest.webmanifest` uses the light background.
 
@@ -40,7 +51,7 @@ The system font stack at 16px. Screen titles (`h2`) 26px bold with tight trackin
 - **Stat tile** (`.stat` in a `.grid2`): label, big number, hint.
 - **Button** (`.btn`, full width, 48px tall; `.ghost` for secondary) and **icon button** (`.icon-btn`, 44px). Every tap target is at least 44px tall (toggles, `.range`, `.link-btn`, `.small-btn`, selects); only `.link-btn.inline` inside running text is exempt.
 - **Bottom tabs** (`.tabs`): four equal columns, icon over label, active tab in the accent.
-- **Sheet** (`dialog` + `.sheet`): bottom sheet on a phone, centered card from 640px; `.facts` for label/value rows and `.msg` (`.good`/`.bad`) for the status line. The general sheet scrolls inside itself up to 92% of the screen height; `.sheet-head .grow` takes a long title between a back and a close button. The Data & backup sheet scrolls the same way; its `.sync` section sits under a divider with an `h3` heading.
+- **Sheet** (`dialog` + `.sheet`): bottom sheet on a phone, centered card from 640px; `.facts` for label/value rows and `.msg` (`.good`/`.bad`) for the status line. The general sheet scrolls inside itself up to 92% of the screen height; `.sheet-head .grow` takes a long title between a back and a close button. The Data & backup sheet scrolls the same way; its `.display` (High contrast) and `.sync` sections sit under a divider with an `h3` heading.
 - **Progress bar** (`.bar`): accent fill for calories, `.protein`, `.carbs` and `.fat` for those macros, `.goal` (good color) for progress to the goal weight, `.over` turns it to the warning color past the target.
 - **Day summary** (`.summary`, `.sum-row`, `.sum-big`, `.sum-left`, `.macros`) and **day navigation** (`.title-row`, `.day-nav`, `.day-label`).
 - **List rows** (`.entries` of `.entry` / `.result` buttons): name with a hint line on the left, kcal with protein on the right; `.add-btn` is the dashed add button under each meal.
