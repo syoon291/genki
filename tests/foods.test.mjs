@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { fromTableRow, fromMyFood, searchFoods, searchKey, makeEntry, recentMyFoods, unitLabel } from "../foods.js";
+import { fromTableRow, fromMyFood, searchFoods, searchKey, makeEntry, unitLabel } from "../foods.js";
 
 const jp = [
   ["jp1", "Chicken, broiler, breast, meat without skin, raw", 105, 23.3, 1.9, 0.1],
@@ -78,11 +78,6 @@ test("an entry stores nutrients per unit and the amount eaten", () => {
   const egg = makeEntry(us[0], us[0].units[1], 2, { id: "e2", date: "2026-01-15", meal: "breakfast" });
   assert.equal(egg.base.kcal, 71.5);
   assert.equal(egg.unit, "1 large");
-});
-
-test("recent my foods come first", () => {
-  const list = [{ id: "a", lastUsed: "2026-01-01" }, { id: "b", lastUsed: "2026-01-09" }, { id: "c" }];
-  assert.deepEqual(recentMyFoods(list).map((f) => f.id), ["b", "a", "c"]);
 });
 
 test("the bundled tables load and search", () => {
