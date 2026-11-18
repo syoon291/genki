@@ -32,7 +32,7 @@ test("nutrition rows keep kcal, protein, carbs and fat per day and meal, oldest 
   const { rows, skipped } = parseMfpNutrition(nutrition);
   assert.deepEqual(skipped, []);
   assert.equal(rows.length, 5);
-  assert.deepEqual(rows[0], { date: "2026-03-02", meal: "lunch", mealName: "Lunch", kcal: 600, protein: 40, carbs: 50, fat: 20 });
+  assert.deepEqual(rows[0], { date: "2026-03-02", meal: "lunch", mealName: "Lunch", kcal: 600, protein: 40, carbs: 50, fat: 20, fiber: 3, sugar: 2, sodium: 100 });
   assert.equal(rows[1].kcal, 800.4);
   assert.deepEqual(rows.slice(2, 4).map((r) => r.meal), ["breakfast", "lunch"]);
 });
@@ -42,7 +42,7 @@ test("nutrition: bad dates and numbers are skipped with their line; empty meals 
   const { rows, skipped } = parseMfpNutrition(text);
   assert.deepEqual(skipped.map((s) => s.line), [2, 3, 4]);
   assert.equal(rows.length, 1);
-  assert.deepEqual(rows[0], { date: "2026-03-05", meal: "snacks", mealName: "Snacks", kcal: 150, protein: 10, carbs: 15, fat: 2 });
+  assert.deepEqual(rows[0], { date: "2026-03-05", meal: "snacks", mealName: "Snacks", kcal: 150, protein: 10, carbs: 15, fat: 2, fiber: 6, sugar: 4, sodium: 200 });
 });
 
 test("custom meal names land in snacks", () => {
@@ -67,7 +67,7 @@ test("plan: every meal becomes one entry with a fixed id; repeats become one my 
   const plan = planMfpImport({ meals: rows, today: "2026-03-10", now });
   assert.equal(plan.entries.length, 5);
   const e = plan.entries[0];
-  assert.deepEqual(e, { id: "mfp-2026-03-02-lunch", date: "2026-03-02", meal: "lunch", name: "MyFitnessPal lunch", source: "mfp", ref: null, amount: 1, unit: "1 meal", base: { kcal: 600, protein: 40, fat: 20, carbs: 50 }, createdAt: now.toISOString() });
+  assert.deepEqual(e, { id: "mfp-2026-03-02-lunch", date: "2026-03-02", meal: "lunch", name: "MyFitnessPal lunch", source: "mfp", ref: null, amount: 1, unit: "1 meal", base: { kcal: 600, protein: 40, fat: 20, carbs: 50, fiber: 3, sugar: 2, sodium: 100 }, createdAt: now.toISOString() });
   assert.equal(entryId(rows[0]), e.id);
   assert.equal(plan.myFoods.length, 1);
   const f = plan.myFoods[0];
@@ -115,4 +115,51 @@ test("the confirm text lists counts and the date range, then what is left out", 
   assert.equal(lines[0], "Add 5 meals to the food log, 1 repeated meal to my foods, 1 weigh-in (read as lb), from 2026-03-01 to 2026-03-04?");
   assert.match(text, /2 lines could not be read/);
   assert.match(text, /exercise calories or steps/);
+});
+
+test("nutrition rows carry fiber, sugar and sodium when the file has them; blanks are left out", () => {
+  const text = [
+    NUT_HEAD,
+    row("2026-03-02", "Lunch", 600, 20, 50, 40),
+    "2026-03-02,Lunch,100,1,0,0,0,0,0,50.4,0,10,1.5,,5,0,0,0,0,",
+    "2026-03-03,Dinner,500,10,0,0,0,0,0,,0,60,,x,30,0,0,0,0,",
+  ].join("\n");
+  const { rows, skipped } = parseMfpNutrition(text);
+  assert.deepEqual(skipped, []);
+  assert.deepEqual(rows[0], { date: "2026-03-02", meal: "lunch", mealName: "Lunch", kcal: 700, protein: 45, carbs: 60, fat: 21, fiber: 4.5, sugar: 2, sodium: 150 });
+  assert.deepEqual(rows[1], { date: "2026-03-03", meal: "dinner", mealName: "Dinner", kcal: 500, protein: 30, carbs: 60, fat: 10 });
+  const plain = parseMfpNutrition("Date,Meal,Calories,Protein (g)\n2026-03-02,Lunch,600,40");
+  assert.deepEqual(plain.rows[0], { date: "2026-03-02", meal: "lunch", mealName: "Lunch", kcal: 600, protein: 40, carbs: 0, fat: 0 });
+});
+
+test("plan: new entries and my foods get fiber, sugar and sodium", () => {
+  const { rows } = parseMfpNutrition(nutrition);
+  const plan = planMfpImport({ meals: rows, today: "2026-03-10" });
+  assert.deepEqual(plan.entries[0].base, { kcal: 600, protein: 40, fat: 20, carbs: 50, fiber: 3, sugar: 2, sodium: 100 });
+  const f = plan.myFoods[0];
+  assert.deepEqual([f.fiber, f.sugar, f.sodium], [3, 2, 100]);
+  assert.deepEqual([plan.fillEntries, plan.fillFoods], [[], []]);
+});
+
+test("re-import fills in fiber, sugar and sodium on what was imported before, without duplicating or undoing edits", () => {
+  const { rows } = parseMfpNutrition(nutrition);
+  const strip = ({ fiber, sugar, sodium, ...r }) => r;
+  const old = planMfpImport({ meals: rows.map(strip), today: "2026-03-10" });
+  const entries = old.entries.map((e, i) => (i === 0 ? { ...e, amount: 1.5, meal: "dinner" } : e));
+  const myFoods = [{ ...old.myFoods[0], name: "Chicken bowl" }, { id: "mine", name: "Mine", kcal: 300, protein: 15, carbs: 35, fat: 10 }];
+  const again = planMfpImport({ meals: rows, entries, myFoods, today: "2026-03-10" });
+  assert.deepEqual([again.entries.length, again.myFoods.length, again.alreadyLogged], [0, 0, 0]);
+  assert.equal(again.fillEntries.length, 5);
+  const e = again.fillEntries.find((x) => x.id === entries[0].id);
+  assert.deepEqual({ ...e, base: undefined }, { ...entries[0], base: undefined });
+  assert.deepEqual(e.base, { ...entries[0].base, fiber: 3, sugar: 2, sodium: 100 });
+  assert.deepEqual(again.fillFoods, [{ ...myFoods[0], fiber: 3, sugar: 2, sodium: 100 }]);
+  assert.ok(!planIsEmpty(again));
+  assert.equal(mfpConfirmText(again).split("\n\n")[0], "Fill in fiber, sugar and sodium on 5 meals in the food log and 1 my food imported before?");
+  // A third import has nothing left to do; an extra already there is never overwritten.
+  const third = planMfpImport({ meals: rows, entries: again.fillEntries, myFoods: again.fillFoods, today: "2026-03-10" });
+  assert.ok(planIsEmpty(third));
+  assert.equal(third.alreadyLogged, 5);
+  const kept = planMfpImport({ meals: rows, entries: [{ ...old.entries[0], base: { ...old.entries[0].base, fiber: 9 } }], today: "2026-03-10" });
+  assert.deepEqual(kept.fillEntries[0].base, { ...old.entries[0].base, fiber: 9, sugar: 2, sodium: 100 });
 });

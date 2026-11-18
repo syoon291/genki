@@ -635,7 +635,7 @@ function foodFlow(ctx, swap) {
       <form class="form spaced" id="meal-form" novalidate>
         <div class="grid2">
           <label class="field"><span>Number of servings</span><input name="servings" type="number" inputmode="decimal" min="0" step="any" value="1"></label>
-          <label class="field"><span>Meal</span><select name="meal">${mealOptions(ctx.meal)}</select></label>
+          <label class="field"><span>Meal</span><select name="meal">${mealOptions(savedMeal(m) ?? ctx.meal)}</select></label>
         </div>
         ${daysPicker(ctx.days)}
         <div id="meal-preview" class="preview" aria-live="polite"></div>
@@ -971,6 +971,10 @@ async function editRecipe(food) {
 
 // ---------- my meals ----------
 
+// The meal (breakfast, lunch, ...) a my meal was saved with, or null for one
+// saved before meals were kept, or imported without one.
+const savedMeal = (m) => (MEALS.some((x) => x.id === m?.meal) ? m.meal : null);
+
 // Save the foods logged in one meal of the shown day as a my meal.
 async function openSaveMeal(mealId) {
   const entries = byMeal(await db.getByIndex("entries", "date", day))[mealId]?.entries ?? [];
@@ -996,7 +1000,7 @@ async function openSaveMeal(mealId) {
       if (!name) { msg.textContent = "Give the meal a name."; return; }
       if (!ids.size) { msg.textContent = "Keep at least one food in it."; return; }
       const items = entries.filter((e) => ids.has(e.id)).map(itemFromEntry);
-      await db.put("myMeals", { id: newId(), name, items, uses: 0, lastUsed: "", createdAt: new Date().toISOString() });
+      await db.put("myMeals", { id: newId(), name, meal: mealId, items, uses: 0, lastUsed: "", createdAt: new Date().toISOString() });
       closePanel();
       rerender();
       announce(`Saved ${name} as a meal with ${plural(items.length, "food")}.`);

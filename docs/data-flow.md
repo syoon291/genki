@@ -36,7 +36,7 @@ Record shapes (what each field means is in [nutrition.md](nutrition.md)):
 - workout session: `{ id, date (ISO time finished), day (plan day name), sets: [{ exId (library id in workouts.js), w (kg, 0 for bodyweight), reps, rir|null }], minutes, source?: "liftlog" }`.
 - `liftPlan`: `{ goal, days, equip, level, split, created, schedule: [{ name, slots: [{ exId, main, sets, lo, hi, rir, rest (s) }] }] }` (Liftlog's shape). `liftNext`: index of the next day. `liftDraft`: the session in progress, `{ dayIdx, day, started (ms), entries: [{ exId, slot, sets: [{ w, reps, rir (typed text, in the shown unit), done }] }] }` or null. `liftUnit`: `"kg"`|`"lb"`. `liftForm`: the plan toggles. `liftFocus`: the trend chart's exercise. `liftlogImport`: when Liftlog data was brought over, or `"dismissed"`.
 - my food: `{ id, name, brand?, serving, grams|null, kcal, protein, fat, carbs, fiber|null, sugar|null, sodium|null, uses, lastUsed, createdAt, recipe?, importedAt? }`. Older records lack the three optional nutrients, which reads the same as null. A recipe adds `recipe: { servings, items: [item] }`; its numbers are the items' total per serving.
-- my meal: `{ id, name, items: [item], uses, lastUsed, createdAt, meal?, importedAt? }` (`meal` and `importedAt` from Import My foods). An item (of a my meal or a recipe) is an entry without its day, meal or id: `{ name, source, ref, amount, unit, base }`.
+- my meal: `{ id, name, items: [item], uses, lastUsed, createdAt, meal?, importedAt? }` (`meal`: the meal it was saved from, or the one Import My foods gave; older records lack it. `importedAt` from Import My foods). An item (of a my meal or a recipe) is an entry without its day, meal or id: `{ name, source, ref, amount, unit, base }`.
 
 Upgrades: `UPGRADES[n]` moves the database from version `n` to `n+1`, and opening runs every step from the stored version up. To add or change a store, bump that version number, append an upgrade step, and bump `SCHEMA` in `backup.js` to match. An upgrade step never drops or renames existing data: those records are on the owner's phone and in their backups.
 
@@ -68,7 +68,7 @@ An older backup (lower `schema`) is accepted as is today: a schema 1 file only h
 
 ## MyFitnessPal import
 
-A third way in, beside the backup file and sync: the Data & backup sheet reads a MyFitnessPal export's CSVs in the browser (`mfp.js`) and adds records with `putMany`, store by store: food-log entries, my foods, then weigh-ins. It only adds; it never replaces or clears a record. What it adds is in [nutrition.md](nutrition.md#myfitnesspal-import). No store or schema changed for it. **Import My foods** ([nutrition.md](nutrition.md#import-my-foods)) is the same kind of add-only path into `myFoods` and `myMeals`.
+A third way in, beside the backup file and sync: the Data & backup sheet reads a MyFitnessPal export's CSVs in the browser (`mfp.js`) and adds records with `putMany`, store by store: food-log entries, my foods, then weigh-ins. It only adds, apart from filling in fiber, sugar and sodium on entries and my foods an earlier import made (the rest of the record kept); it never clears a record. What it adds is in [nutrition.md](nutrition.md#myfitnesspal-import). No store or schema changed for it. **Import My foods** ([nutrition.md](nutrition.md#import-my-foods)) is the same kind of add-only path into `myFoods` and `myMeals`.
 
 ## Device-only store
 
