@@ -1,0 +1,1 @@
+{"date": "2026-11-18", "project": "genki", "summary": "The Data & backup sheet imports a MyFitnessPal export: every day's meals go into the food log, meal totals that repeat become My foods, and weights fill days with no weigh-in.", "pr": 8, "why": "Moves past MyFitnessPal history into genki with a one-time on-device import, no token or data repo."}

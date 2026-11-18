@@ -33,7 +33,7 @@ function relDay(key) {
   return fmtDay(key);
 }
 
-async function syncProfileWeight() {
+export async function syncProfileWeight() {
   const profile = await db.getMeta("profile", null);
   if (!profile) return;
   const s = summary(await db.getAll("weighIns"));

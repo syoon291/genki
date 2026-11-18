@@ -26,7 +26,7 @@ Record shapes (what each field means is in [nutrition.md](nutrition.md)):
 
 - `profile`: `{ sex: "female"|"male", birthYear, heightCm, weightKg, activity, goalKg|null, targetDate: "YYYY-MM-DD"|null, deficit, proteinPerKg, macroMode: "pct"|"g"|null, carbPct, fatPct (with "pct"), carbG, fatG (with "g"), updatedAt }`. `weightKg` follows the weigh-ins once there are any.
 - weigh-in: `{ date: "YYYY-MM-DD", kg (0.1 kg steps), at (ISO time logged) }`.
-- entry: `{ id, date, meal: "breakfast"|"lunch"|"dinner"|"snacks", name, source: "jp"|"us"|"my"|"quick", ref (table or my-food id, or null), amount, unit ("g", a portion label, or "serving"), base: { kcal, protein, fat, carbs } per one unit, createdAt }`. The nutrients eaten are `base x amount`; an entry copies its numbers, so editing or deleting a my food never changes logged days.
+- entry: `{ id, date, meal: "breakfast"|"lunch"|"dinner"|"snacks", name, source: "jp"|"us"|"my"|"quick"|"mfp", ref (table or my-food id, or null), amount, unit ("g", a portion label, or "serving"), base: { kcal, protein, fat, carbs } per one unit, createdAt }`. The nutrients eaten are `base x amount`; an entry copies its numbers, so editing or deleting a my food never changes logged days. A MyFitnessPal meal total (`source: "mfp"`, id `mfp-<date>-<meal>`, unit `"1 meal"`, see [nutrition.md](nutrition.md#myfitnesspal-import)) is the one entry with a fixed id, so a re-import finds it.
 - weekly history: `{ weekStart, weekEnd ("YYYY-MM-DD"), kcal (a day), protein, carbs, fat, fiber (g a day), proteinPct, carbPct, fatPct (each a number or null), source: "csv", at (ISO time imported) }`.
 - workout session: `{ id, date (ISO time finished), day (plan day name), sets: [{ exId (library id in workouts.js), w (kg, 0 for bodyweight), reps, rir|null }], minutes, source?: "liftlog" }`.
 - `liftPlan`: `{ goal, days, equip, level, split, created, schedule: [{ name, slots: [{ exId, main, sets, lo, hi, rir, rest (s) }] }] }` (Liftlog's shape). `liftNext`: index of the next day. `liftDraft`: the session in progress, `{ dayIdx, day, started (ms), entries: [{ exId, slot, sets: [{ w, reps, rir (typed text, in the shown unit), done }] }] }` or null. `liftUnit`: `"kg"`|`"lb"`. `liftForm`: the plan toggles. `liftFocus`: the trend chart's exercise. `liftlogImport`: when Liftlog data was brought over, or `"dismissed"`.
@@ -59,6 +59,10 @@ The module exposes `get`, `getAll`, `getByIndex`, `put`, `putMany` (several reco
 - Import: `parseBackup()` against `storeNames()` and the key paths `db.js` exports (every record must carry its store's key), a confirm prompt, then `replaceAll()`. The replace is one transaction, so a failure part way (for example a record IndexedDB rejects; `replaceAll()` aborts the transaction) leaves the stored data untouched. Stores the file does not mention are left as they are. `lastImportAt` is set afterwards (best effort: a failure there does not undo the import).
 
 An older backup (lower `schema`) is accepted as is today: a schema 1 file only has `meta`, so importing it replaces `meta` (including any saved profile) and leaves the food log, my foods and weigh-ins as they are (a schema 2 file has no weigh-ins and a schema 3 file no workouts and a schema 4 file no weekly history, so it leaves those as they are); once a later schema changes a record shape, `parseBackup` is where old files get migrated.
+
+## MyFitnessPal import
+
+A third way in, beside the backup file and sync: the Data & backup sheet reads a MyFitnessPal export's CSVs in the browser (`mfp.js`) and adds records with `putMany`, store by store: food-log entries, my foods, then weigh-ins. It only adds; it never replaces or clears a record. What it adds is in [nutrition.md](nutrition.md#myfitnesspal-import). No store or schema changed for it.
 
 ## Device-only store
 

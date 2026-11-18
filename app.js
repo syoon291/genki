@@ -9,7 +9,9 @@ import { buildBackup, backupFileName, parseBackup, countRecords } from "./backup
 import { esc, initPanel, focusKey, restoreFocus } from "./ui.js";
 import { syncSection, handleSyncAct, handleSyncSubmit, setSyncHooks, clearSyncNote, autoSync } from "./sync-view.js";
 import { nutritionView, todayTiles, handleViewClick, setRerender } from "./nutrition-view.js";
-import { weightCard, handleWeightClick, setWeightRerender } from "./weight-view.js";
+import { weightCard, handleWeightClick, setWeightRerender, syncProfileWeight } from "./weight-view.js";
+import { detectMfpFile, parseMfpNutrition, parseMfpWeights, planMfpImport, mfpConfirmText, planIsEmpty } from "./mfp.js";
+import { dayKey } from "./nutrition.js";
 import { workoutsView, nextWorkoutCard, handleLiftClick, handleLiftInput, setLiftRerender, initRestTimer } from "./workouts-view.js";
 
 const TABS = ["today", "nutrition", "workouts"];
@@ -131,6 +133,10 @@ async function renderSheet(message = "", tone = "") {
       <button type="button" class="btn ghost" data-act="import">Import backup…</button>
     </div>
     <p class="hint">Importing replaces what is stored here with the backup's contents.</p>
+    <div class="stack">
+      <button type="button" class="btn ghost" data-act="mfp">Import MyFitnessPal…</button>
+    </div>
+    <p class="hint">Pick the CSV files from a MyFitnessPal export (Nutrition-Summary, Measurement-Summary). Each day's meals go into the food log, meals you had more than once become my foods, and weights fill days with no weigh-in. Nothing already here is replaced.</p>
     <p class="msg ${tone}" role="status">${esc(message)}</p>
     ${await syncSection()}`;
 }
@@ -166,6 +172,55 @@ async function doImport(file) {
   render();
 }
 
+// ---------- MyFitnessPal import ----------
+
+let mfpInput;
+function pickMfp() {
+  if (!mfpInput) {
+    mfpInput = Object.assign(document.createElement("input"), { type: "file", accept: ".csv,text/csv,text/plain", multiple: true, hidden: true });
+    document.body.append(mfpInput);
+    mfpInput.addEventListener("change", async () => {
+      const files = [...mfpInput.files];
+      mfpInput.value = "";
+      if (!files.length) return;
+      try { await importMfp(files); }
+      catch (err) { await renderSheet(`MyFitnessPal import failed: ${err.message}`, "bad"); }
+    });
+  }
+  mfpInput.click();
+}
+
+async function importMfp(files) {
+  const meals = [], weights = [], ignored = [];
+  let skipped = 0, unit = "lb";
+  for (const file of files) {
+    const text = await file.text();
+    const kind = detectMfpFile(text);
+    if (kind === "nutrition") { const r = parseMfpNutrition(text); meals.push(...r.rows); skipped += r.skipped.length; }
+    else if (kind === "measurement") { const r = parseMfpWeights(text); weights.push(...r.rows); skipped += r.skipped.length; unit = r.unit; }
+    else if (kind === "exercise") ignored.push(`${file.name} is left out: genki does not keep exercise calories or steps.`);
+    else ignored.push(`${file.name} is not a MyFitnessPal export file and is left out.`);
+  }
+  const [entries, myFoods, weighIns] = await Promise.all([db.getAll("entries"), db.getAll("myFoods"), db.getAll("weighIns")]);
+  const plan = planMfpImport({ meals, weights, entries, myFoods, weighIns, today: dayKey() });
+  if (planIsEmpty(plan)) {
+    const why = meals.length || weights.length ? "Everything in those files is already here." : "No meals or weights found in those files.";
+    await renderSheet(`${why} Nothing changed.${ignored.length ? ` ${ignored.join(" ")}` : ""}`, meals.length || weights.length ? "" : "bad");
+    return;
+  }
+  if (!confirm(mfpConfirmText(plan, { ignored, skipped, unit }))) { await renderSheet("Import cancelled. Nothing changed."); return; }
+  if (plan.entries.length) await db.putMany("entries", plan.entries);
+  if (plan.myFoods.length) await db.putMany("myFoods", plan.myFoods);
+  if (plan.weighIns.length) { await db.putMany("weighIns", plan.weighIns); await syncProfileWeight(); }
+  const done = [
+    plan.entries.length ? `${plan.entries.length} ${plan.entries.length === 1 ? "meal" : "meals"}` : "",
+    plan.myFoods.length ? `${plan.myFoods.length} ${plan.myFoods.length === 1 ? "my food" : "my foods"}` : "",
+    plan.weighIns.length ? `${plan.weighIns.length} ${plan.weighIns.length === 1 ? "weigh-in" : "weigh-ins"}` : "",
+  ].filter(Boolean);
+  await renderSheet(`Imported ${done.join(", ")} from MyFitnessPal.${plan.myFoods.length ? " Rename the new my foods in Nutrition > My foods." : ""}`, "good");
+  render();
+}
+
 setSyncHooks({ rerender: () => (dialog.open ? renderSheet().catch((e) => console.warn("genki: could not redraw the sheet", e)) : undefined), restored: () => render() });
 
 $("#data-btn").addEventListener("click", async () => {
@@ -181,6 +236,7 @@ sheet.addEventListener("click", async (e) => {
     try { await doExport(); } catch (err) { await renderSheet(`Export failed: ${err.message}`, "bad"); }
   }
   if (act === "import") fileInput.click();
+  if (act === "mfp") pickMfp();
   if (act) handleSyncAct(act);
 });
 sheet.addEventListener("submit", (e) => {

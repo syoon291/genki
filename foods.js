@@ -11,6 +11,7 @@ export const SOURCES = {
   my: "My food",
   jp: "Japan table",
   us: "USDA",
+  mfp: "MyFitnessPal",
 };
 
 // Rows from foods/*.json: [id, name, kcal, protein, fat, carbs, portions?].
