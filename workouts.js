@@ -373,3 +373,17 @@ export function newSessions(existing, incoming) {
   const ids = new Set(existing.map((s) => s.id));
   return incoming.filter((s) => !ids.has(s.id));
 }
+
+// What a screen reader hears when a set is ticked done or undone, and when a
+// session is saved. w and reps are the typed text of the set row.
+export function setMessage({ name, n, of, done, w, reps, unit, rest }) {
+  if (!done) return `${name} set ${n} of ${of} marked not done.`;
+  const load = parseFloat(w) > 0 ? `${w} ${unit} × ${reps}` : `${reps} reps`;
+  const r = rest > 0 ? ` Rest ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")}.` : "";
+  return `${name} set ${n} of ${of} done: ${load}.${r}`;
+}
+
+export function sessionSavedMessage(session, prs) {
+  const sets = session.sets.length;
+  return `Session saved: ${session.day}, ${sets} ${sets === 1 ? "set" : "sets"}, ${prs.length} new ${prs.length === 1 ? "PR" : "PRs"}.`;
+}

@@ -4,8 +4,8 @@
 // weight to the latest 7-day average, so the daily targets follow the trend.
 import * as db from "./db.js";
 import { dayKey, shiftDay, kgToLb } from "./nutrition.js";
-import { summary, trend, sortWeighIns, averageEnding, weightAxis, daysBetween, weightProblem, validDate, parseWeighInCsv, round1 } from "./weight.js";
-import { esc, dec1, openPanel, swapPanel, closePanel, panelEl, closeBtn, backBtn } from "./ui.js";
+import { summary, trend, sortWeighIns, averageEnding, weightAxis, daysBetween, weightProblem, validDate, parseWeighInCsv, round1, weighInMessage } from "./weight.js";
+import { esc, dec1, announce, openPanel, swapPanel, closePanel, panelEl, closeBtn, backBtn } from "./ui.js";
 
 let rerender = () => {};
 export function setWeightRerender(fn) { rerender = fn; }
@@ -176,6 +176,7 @@ async function openLog(date = dayKey(), { fromHistory = false } = {}) {
         await syncProfileWeight();
         rerender();
         if (fromHistory) await openHistory(); else closePanel();
+        announce(weighInMessage(`Weigh-in on ${fmtDay(existing.date)} deleted.`, summary(await db.getAll("weighIns")).avg));
       }
     },
     input: (e) => {
@@ -199,6 +200,7 @@ async function openLog(date = dayKey(), { fromHistory = false } = {}) {
       await syncProfileWeight();
       rerender();
       if (fromHistory) await openHistory(); else closePanel();
+      announce(weighInMessage(`Weigh-in saved: ${round1(kg)} kg on ${fmtDay(d)}.`, summary(await db.getAll("weighIns")).avg));
     },
   };
   if (document.querySelector("#panel-dialog").open) swapPanel(html, handlers); else openPanel(html, handlers);

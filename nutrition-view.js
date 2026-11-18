@@ -2,9 +2,9 @@
 // the profile sheet, the add-food flow (search, quick-add, my foods) and the
 // Today tab's tiles. Targets maths lives in nutrition.js, search in foods.js.
 import * as db from "./db.js";
-import { ACTIVITY, DEFAULT_DEFICIT, MACRO_LIMITS, DEFAULT_PROTEIN_PER_KG, MAX_DEFICIT, PROTEIN_RANGE, MEALS, profileProblems, targets, projection, dayKey, shiftDay, byMeal, sumEntries, entryNutrients, kgToLb, mealForHour, parseWeeklyCsv } from "./nutrition.js";
+import { ACTIVITY, DEFAULT_DEFICIT, MACRO_LIMITS, DEFAULT_PROTEIN_PER_KG, MAX_DEFICIT, PROTEIN_RANGE, MEALS, profileProblems, targets, projection, dayKey, shiftDay, byMeal, sumEntries, entryNutrients, kgToLb, mealForHour, parseWeeklyCsv, dayTotalsMessage } from "./nutrition.js";
 import { SOURCES, fromTableRow, fromMyFood, searchFoods, makeEntry, recentMyFoods, unitLabel } from "./foods.js";
-import { esc, int, dec1, newId, openPanel, swapPanel, closePanel, panelEl, closeBtn, backBtn } from "./ui.js";
+import { esc, int, dec1, newId, announce, openPanel, swapPanel, closePanel, panelEl, closeBtn, backBtn } from "./ui.js";
 
 // The day shown in the Nutrition tab (YYYY-MM-DD, local); resets to today on reload.
 let day = dayKey();
@@ -17,6 +17,12 @@ async function loadProfile() { return db.getMeta("profile", null); }
 function targetsFor(profile) {
   if (!profile || profileProblems(profile).length) return null;
   return targets(profile);
+}
+
+// Announce a change to the shown day's log, with the day's totals after it.
+async function announceDay(action) {
+  const [profile, entries] = await Promise.all([loadProfile(), db.getByIndex("entries", "date", day)]);
+  announce(dayTotalsMessage(action, sumEntries(entries), targetsFor(profile)));
 }
 
 const mealLabel = (id) => MEALS.find((m) => m.id === id)?.label ?? "Snacks";
@@ -164,6 +170,7 @@ async function repeatPrevious() {
   const copies = prev.map((e, i) => ({ ...e, id: newId(), date: day, createdAt: new Date(now.getTime() + i).toISOString() }));
   await db.putMany("entries", copies);
   rerender();
+  await announceDay(`Added ${copies.length} ${copies.length === 1 ? "food" : "foods"}.`);
 }
 
 // ---------- profile sheet ----------
@@ -476,6 +483,7 @@ async function openAdd(meal = mealForHour(new Date().getHours())) {
     }
     closePanel();
     rerender();
+    await announceDay(`Added ${picked.name} to ${mealLabel(m)}.`);
   }
 
   // ----- quick add -----
@@ -510,6 +518,7 @@ async function openAdd(meal = mealForHour(new Date().getHours())) {
     });
     closePanel();
     rerender();
+    await announceDay(`Added ${f.name} to ${mealLabel(String(fd.get("meal")))}.`);
   }
 
   openPanel(searchScreen(), handlers);
@@ -701,7 +710,7 @@ async function openEntry(id) {
       panelEl().querySelector("#entry-preview").innerHTML = preview(amount);
     },
     click: async (act) => {
-      if (act === "delete") { await db.del("entries", e.id); closePanel(); rerender(); }
+      if (act === "delete") { await db.del("entries", e.id); closePanel(); rerender(); await announceDay(`Removed ${e.name}.`); }
     },
     submit: async (form) => {
       const fd = new FormData(form);
@@ -710,6 +719,7 @@ async function openEntry(id) {
       await db.put("entries", { ...e, amount, meal: String(fd.get("meal")) });
       closePanel();
       rerender();
+      await announceDay(`Saved ${e.name}.`);
     },
   });
 }

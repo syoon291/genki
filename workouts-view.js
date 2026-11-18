@@ -8,7 +8,7 @@
 // position, the session in progress, the unit and the plan form in `meta`.
 import * as db from "./db.js";
 import * as L from "./workouts.js";
-import { esc, int } from "./ui.js";
+import { esc, int, announce } from "./ui.js";
 
 let rerender = () => {};
 export function setLiftRerender(fn) { rerender = fn; }
@@ -457,6 +457,7 @@ async function finish() {
   lastSaved = { session, prs };
   stopTimer();
   rerender();
+  announce(L.sessionSavedMessage(session, prs));
   toTop();
 }
 
@@ -521,6 +522,7 @@ export async function handleLiftClick(act, el) {
       await saveDraft();
       rerender();
       if (x.done) startTimer(e.slot.rest);
+      announce(L.setMessage({ name: exName(e.exId), n: si + 1, of: e.sets.length, done: x.done, w: x.w, reps: x.reps, unit: S.unit, rest: x.done ? e.slot.rest : 0 }));
       break;
     }
     case "lift-add-set": { const prev = e.sets[e.sets.length - 1]; e.sets.push({ w: prev ? prev.w : "", reps: "", rir: "", done: false }); await saveDraft(); rerender(); break; }
