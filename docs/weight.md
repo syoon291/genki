@@ -36,6 +36,10 @@ An inline SVG: grey dots for each weigh-in, a green line for the 7-day average, 
 
 From the empty card or the history sheet. One `date,weight_kg` row per line, for example `2026-01-05,80.4`; an optional header row (a first line not starting with a digit), dates as `YYYY-MM-DD` (or `YYYY/MM/DD`), commas, semicolons or tabs (a row split by semicolons or tabs may use a decimal comma, e.g. `2026-01-05;80,4`), quotes, a BOM and Windows line ends are all accepted; blank lines and `#` lines are ignored. Bad rows (not a real date, no weight, a weight outside 30-300 kg) are skipped with their line number; when a day appears twice the later row wins; future days are skipped. A confirm prompt says how many weigh-ins will be added, over which days, how many replace days already logged, and what was skipped. The import adds to the existing weigh-ins (it never clears them), in one transaction.
 
+## MyFitnessPal weights
+
+The MyFitnessPal import (Data & backup sheet) brings weights from the export's Measurement-Summary file: lb converted to kg, and only on days with no weigh-in, so it never replaces one. Details in [nutrition.md](nutrition.md#myfitnesspal-import). `syncProfileWeight` is exported from `weight-view.js` so that import can update the profile weight afterwards.
+
 ## Profile weight
 
 Every weigh-in change (log, edit, delete, import) sets the profile's `weightKg` to the latest 7-day average, rounded to 0.1 kg, so the calorie, protein, carb and fat targets ([nutrition.md](nutrition.md#targets)) follow the trend. Editing the profile's weight by hand still works, until the next weigh-in change rewrites it. Without a saved profile nothing is written.

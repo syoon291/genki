@@ -20,7 +20,7 @@ The product plan and its decisions live in the owner's knowledge hub, not here. 
 |---------|------|------|
 | Page shell | `index.html` | Header (brand, Data & backup button), the `<main id="view">` the app renders into, the polite live region `#announcer` that speaks view changes to screen readers (see [frontend.md](frontend.md#screen-reader-announcements)), the rest-timer bar, the three-tab bottom bar, the backup sheet `<dialog>`, PWA meta tags, the Content Security Policy meta (see [sync.md](sync.md#content-security-policy)) |
 | App logic | `app.js`, `ui.js` | Tab routing (URL hash), view rendering, the Data & backup sheet; shared UI helpers and the general sheet. See [frontend.md](frontend.md) |
-| Nutrition | `nutrition.js`, `foods.js`, `nutrition-view.js`, `foods/` | Targets maths and food search (pure, unit-tested), the Nutrition tab and its sheets, the bundled food tables. See [nutrition.md](nutrition.md) |
+| Nutrition | `nutrition.js`, `foods.js`, `nutrition-view.js`, `mfp.js`, `foods/` | Targets maths and food search (pure, unit-tested), the Nutrition tab and its sheets, the MyFitnessPal import, the bundled food tables. See [nutrition.md](nutrition.md) |
 | Weight | `weight.js`, `weight-view.js` | Weigh-in maths and CSV parsing (pure, unit-tested), the Today tab's weight card, chart and sheets. See [weight.md](weight.md) |
 | Workouts | `workouts.js`, `workouts-view.js` | Workout maths and the Liftlog migration (pure, unit-tested), the Workouts tab, the rest timer and the Today tab's next-workout card. See [workouts.md](workouts.md) |
 | Store | `db.js` | IndexedDB wrapper: versioned upgrades, get/put/delete, dump and atomic replace; the separate device-only database for the sync token. See [data-flow.md](data-flow.md) |
@@ -30,7 +30,7 @@ The product plan and its decisions live in the owner's knowledge hub, not here. 
 | Offline + install | `sw.js`, `manifest.webmanifest`, `icons/` | Service worker caches the app for offline use; the manifest and icons make it installable. See [deployment.md](deployment.md) |
 | Tests and checks | `tests/`, `scripts/`, `package.json` | Unit tests (Node's built-in runner), a fast repo check, and the food-table build script; `package.json` has no dependencies and only marks the scripts as ES modules. See [local-dev.md](local-dev.md) |
 
-How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), which imports `db.js`, `backup.js`, `ui.js`, `sync-view.js` (which imports `sync.js`), `weight-view.js` (which imports `weight.js`), `workouts-view.js` (which imports `workouts.js`) and `nutrition-view.js` (which imports `nutrition.js` and `foods.js`, and fetches the food tables from `foods/` on first use). On start, `app.js` opens the IndexedDB database (creating or upgrading it), renders the tab named in the URL hash, runs the daily sync when it is due, and registers `sw.js` when served over https.
+How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), which imports `db.js`, `backup.js`, `ui.js`, `mfp.js` (the MyFitnessPal import), `sync-view.js` (which imports `sync.js`), `weight-view.js` (which imports `weight.js`), `workouts-view.js` (which imports `workouts.js`) and `nutrition-view.js` (which imports `nutrition.js` and `foods.js`, and fetches the food tables from `foods/` on first use). On start, `app.js` opens the IndexedDB database (creating or upgrading it), renders the tab named in the URL hash, runs the daily sync when it is due, and registers `sw.js` when served over https.
 
 ## Repository Layout
 
@@ -44,6 +44,7 @@ How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), wh
 ├── nutrition-view.js      Nutrition tab, Today tiles, food sheets
 ├── weight.js              weigh-in maths + CSV (pure, tested)
 ├── weight-view.js         Today weight card, chart, sheets
+├── mfp.js                 MyFitnessPal export import (pure, tested)
 ├── workouts.js            workout maths + Liftlog import (pure, tested)
 ├── workouts-view.js       Workouts tab, rest timer, Today card
 ├── foods/                 bundled food tables (built, committed)

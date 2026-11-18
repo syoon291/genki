@@ -3,6 +3,7 @@ owns:
   - nutrition.js
   - foods.js
   - nutrition-view.js
+  - mfp.js
   - foods/**
 status: current
 ---
@@ -16,6 +17,7 @@ The Nutrition tab logs what was eaten each day against four daily targets: calor
 | `nutrition.js` | Targets maths (calories, protein, carbs and fat), day keys and day totals. Pure functions, unit-tested (`tests/nutrition.test.mjs`) |
 | `foods.js` | Food shapes, search ranking, serving units, building a log entry. Pure, unit-tested (`tests/foods.test.mjs`) |
 | `nutrition-view.js` | The Nutrition tab, the Today tab's tiles, and every nutrition sheet (profile, add food, quick add, my foods, edit entry) |
+| `mfp.js` | The MyFitnessPal import: reads the export's CSVs and plans what it adds. Pure, unit-tested (`tests/mfp.test.mjs`); the Data & backup sheet runs it (see [MyFitnessPal import](#myfitnesspal-import)) |
 | `foods/jp.json`, `foods/us.json` | The bundled food tables (see [Food tables](#food-tables)) |
 
 ## Targets
@@ -54,6 +56,19 @@ Picking a food asks for an amount and a unit: grams for table foods (plus USDA's
 Weekly nutrition averages from another app (for example an old tracker's export) can be imported as read-only history: the Nutrition tab's **Weekly history** button opens a sheet that lists the weeks newest first (dates, kcal a day, protein, carbs, fat and fiber in grams, and the protein / carb / fat split when the file has it). They never count toward a day's targets or totals and cannot be edited in genki.
 
 The CSV has the columns `week_start,week_end,net_kcal_per_day,protein_g,carbs_g,fat_g,fiber_g,carb_pct,fat_pct,protein_pct`. A header row names them (any order; other columns are ignored); without one they are read in that order. `week_start`, `week_end` (YYYY-MM-DD, the end on or after the start) and `net_kcal_per_day` are required, the rest may be blank; percents may end in `%`. Delimiters, quotes, a BOM, `#` lines and decimal commas work as in the weigh-in import ([weight.md](weight.md#csv-import)). Bad rows are skipped with their line number; when a week appears twice the later row wins. A confirm prompt says how many weeks will be added, over which dates, how many replace weeks already there, and what was skipped. Weeks are stored in `nutritionWeeks`, keyed by `week_start` (shape in [data-flow.md](data-flow.md#store)), so a re-import replaces matching weeks. **Remove all** (with a confirm) clears the imported weeks only. Parsing is `parseWeeklyCsv` in `nutrition.js` (`tests/weekly.test.mjs`).
+
+## MyFitnessPal import
+
+The Data & backup sheet's **Import MyFitnessPal...** button takes the CSV files of a MyFitnessPal data export (pick one or several at once; each is recognised by its header row, so the file names do not matter). Nothing goes to a server: the files are read in the browser and the result is stored on the device like anything typed in (owner decision: a one-time import file, no token, no repo).
+
+- **Nutrition-Summary** (`Date,Meal,Calories,Fat (g),...,Carbohydrates (g),Fiber,Sugar,Protein (g),...`): one row per day per meal, the meal's totals only (MyFitnessPal's export has no food names). Each row becomes one food-log entry on that day and meal, named "MyFitnessPal lunch", logged as `1 meal` with its kcal, protein, carbs and fat (the entry shape holds no other nutrients, so fiber, sugar, sodium and the rest are left out). Custom meal names go to snacks. Two rows for one day and meal are added together.
+- **My foods from repeats**: meal totals with the same kcal (to the calorie), protein, carbs and fat (to 0.1 g) on two or more rows become one my food each, named after the meal they were most often with the calories ("Lunch 1,163 kcal"; a taken name gets " (2)"), serving `1 meal`, its use count and last-used day taken from the rows, so they show first in the add sheet's recent list. Rename them in My foods. A my food already holding those four numbers (also one renamed since) is never added again (owner decision: repeats of 2+ become my foods).
+- **Measurement-Summary** (`Date,Weight`, only on days a weight was logged): read as lb unless the header says kg, converted to kg at 0.1 kg. Weights only fill days with no weigh-in; a day that has one keeps it. The profile weight then follows the 7-day average as after any weigh-in change ([weight.md](weight.md#profile-weight)).
+- **Exercise-Summary** (exercise calories and steps) is recognised and left out: genki has nowhere to keep exercise calories or steps (workouts are lifting sessions). Any other file is left out and named in the prompt.
+
+Imported entries have `source: "mfp"` and the id `mfp-<date>-<meal>`, so importing the same files again adds nothing twice: an entry already stored is left as it is (an amount or meal changed in genki survives), and removing one then re-importing brings it back. Days after today are skipped, and so are rows with a bad date or number (with the count in the prompt). A confirm prompt says how many meals, my foods and weigh-ins will be added, over which dates, and what is already here or left out; cancelling changes nothing. Parsing and planning are `parseMfpNutrition`, `parseMfpWeights` and `planMfpImport` in `mfp.js`.
+
+The GitHub sync ([sync.md](sync.md)) stays as it was: optional, and not needed for this import.
 
 ## Food tables
 
