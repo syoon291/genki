@@ -34,7 +34,7 @@ jobs:
         # Only the app ships: docs, tests, scripts and repo tooling stay out of the public site.
         run: |
           mkdir _site
-          cp -R index.html app.js db.js backup.js sync.js sync-view.js merge.js ui.js nutrition.js foods.js nutrition-view.js weight.js weight-view.js mfp.js workouts.js workouts-view.js progress.js progress-view.js styles.css sw.js manifest.webmanifest icons foods _site/
+          cp -R index.html app.js db.js backup.js sync.js sync-view.js merge.js ui.js contrast.js nutrition.js foods.js nutrition-view.js weight.js weight-view.js mfp.js workouts.js workouts-view.js progress.js progress-view.js styles.css sw.js manifest.webmanifest icons foods _site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

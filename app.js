@@ -15,6 +15,7 @@ import { detectMfpFile, parseMfpNutrition, parseMfpWeights, planMfpImport, mfpCo
 import { dayKey } from "./nutrition.js";
 import { progressView, handleProgressClick, setProgressRerender } from "./progress-view.js";
 import { workoutsView, nextWorkoutCard, handleLiftClick, handleLiftInput, setLiftRerender, initRestTimer } from "./workouts-view.js";
+import { initContrast, setContrast, contrastSection } from "./contrast.js";
 
 const TABS = ["today", "nutrition", "workouts", "progress"];
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -81,6 +82,7 @@ async function render() {
 setRerender(() => render());
 setWeightRerender(() => render());
 setLiftRerender(() => render());
+initContrast();
 setProgressRerender(() => render());
 initPanel();
 initRestTimer();
@@ -141,6 +143,7 @@ async function renderSheet(message = "", tone = "") {
     </div>
     <p class="hint">Pick the CSV files from a MyFitnessPal export (Nutrition-Summary, Measurement-Summary). Each day's meals go into the food log, meals you had more than once become my foods, and weights fill days with no weigh-in. Nothing already here is replaced.</p>
     <p class="msg ${tone}" role="status">${esc(message)}</p>
+    ${contrastSection()}
     ${await syncSection()}`;
 }
 
@@ -242,6 +245,12 @@ sheet.addEventListener("click", async (e) => {
   }
   if (act === "import") fileInput.click();
   if (act === "mfp") pickMfp();
+  if (act === "contrast") {
+    const v = e.target.closest("[data-act]").dataset.v;
+    setContrast(v);
+    await renderSheet();
+    sheet.querySelector(`[data-act="contrast"][data-v="${v}"]`)?.focus();
+  }
   if (act) handleSyncAct(act);
 });
 sheet.addEventListener("submit", (e) => {

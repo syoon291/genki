@@ -2,12 +2,13 @@
 owns:
   - app.js
   - ui.js
+  - contrast.js
 status: current
 ---
 
 # Frontend
 
-`app.js` is the shell: it routes tabs and renders each into the one `<main id="view">` element of `index.html`, re-reading current state from IndexedDB each time (rendering is async; a newer render wins over a slower one). Feature views live in their own modules (`nutrition-view.js`, see [nutrition.md](nutrition.md); `weight-view.js`, see [weight.md](weight.md); `workouts-view.js`, see [workouts.md](workouts.md)); `app.js` forwards taps on any `[data-act]` element in the view to them (acts starting `lift-` go to the workouts view, `w-` to the weight view, `p-` to the progress view, the rest to nutrition), and every input and change event in the view to the workouts view (set rows and its selects). `ui.js` holds shared helpers: `esc()`, number formats, ids, and the general bottom sheet.
+`app.js` is the shell: it routes tabs and renders each into the one `<main id="view">` element of `index.html`, re-reading current state from IndexedDB each time (rendering is async; a newer render wins over a slower one). Feature views live in their own modules (`nutrition-view.js`, see [nutrition.md](nutrition.md); `weight-view.js`, see [weight.md](weight.md); `workouts-view.js`, see [workouts.md](workouts.md)); `app.js` forwards taps on any `[data-act]` element in the view to them (acts starting `lift-` go to the workouts view, `w-` to the weight view, `p-` to the progress view, the rest to nutrition), and every input and change event in the view to the workouts view (set rows and its selects). `ui.js` holds shared helpers: `esc()`, number formats, ids, and the general bottom sheet. `contrast.js` holds the High contrast setting shown in the Data & backup sheet: it sets `data-contrast="more"` on `<html>` on start and whenever the choice or the system's `prefers-contrast` changes (tokens: [design-system.md](design-system.md)).
 
 ## Tabs
 

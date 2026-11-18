@@ -3,11 +3,12 @@
 // published by the Pages workflow. Run from the repo root with Node 20+.
 import { readFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { contrastFailures } from "./contrast.mjs";
 
 const fail = (msg) => { console.error(`check failed: ${msg}`); process.exit(1); };
 
 // App files load as ES modules; sw.js is a classic service worker script.
-const MODULES = ["app.js", "db.js", "backup.js", "sync.js", "sync-view.js", "merge.js", "ui.js", "nutrition.js", "foods.js", "nutrition-view.js", "weight.js", "weight-view.js", "mfp.js", "workouts.js", "workouts-view.js", "progress.js", "progress-view.js"];
+const MODULES = ["app.js", "db.js", "backup.js", "sync.js", "sync-view.js", "merge.js", "ui.js", "contrast.js", "nutrition.js", "foods.js", "nutrition-view.js", "weight.js", "weight-view.js", "mfp.js", "workouts.js", "workouts-view.js", "progress.js", "progress-view.js"];
 for (const [f, args] of [...MODULES.map((m) => [m, ["--input-type=module"]]), ["sw.js", []]]) {
   try { execFileSync(process.execPath, ["--check", ...args], { input: readFileSync(f), stdio: ["pipe", "pipe", "pipe"] }); }
   catch (e) { fail(`${f} does not parse\n${e.stderr}`); }
@@ -62,4 +63,8 @@ if (!wf) fail("could not find the site copy step in .github/workflows/pages.yml"
 const staged = wf[1].trim().split(/\s+/);
 for (const f of shell) if (!staged.includes(f.split("/")[0])) fail(`sw.js precaches ${f}, but the Pages workflow does not copy it into the site`);
 
-console.log(`ok: scripts parse, manifest valid, ${shell.length} shell files precached and published`);
+// Color tokens keep their contrast floors in all four themes (scripts/contrast.mjs).
+const low = contrastFailures(readFileSync("styles.css", "utf8"));
+if (low.length) fail(`contrast below the floor in styles.css:\n  ${low.join("\n  ")}`);
+
+console.log(`ok: scripts parse, manifest valid, ${shell.length} shell files precached and published, color contrast meets its floors`);
