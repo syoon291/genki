@@ -513,3 +513,16 @@ fieldset.plain legend { padding: 0; margin-bottom: 6px; }
 .icon-btn.primary { background: var(--accent); color: var(--accent-ink); }
 .icon-btn:disabled { opacity: .4; cursor: default; }
 .tracker .link-btn { align-self: flex-start; }
+
+/* ---------- coach cards ---------- */
+.coach .stat-label { display: block; }
+.coach-line { margin: 6px 0 0; line-height: 1.45; }
+.coach-sub { font-size: 13px; font-weight: 650; color: var(--muted); margin: 16px 0 8px; }
+.coach .ideas { box-shadow: none; }
+.win { margin: 6px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); font-weight: 600; line-height: 1.4; }
+.win .stat-label { color: var(--accent-deep); margin-bottom: 2px; }
+.coach-facts { margin: 12px 0 0; }
+.coach-facts div { padding: 10px 0; border-top: 1px solid var(--line); }
+.coach-facts div:first-child { border-top: 0; padding-top: 0; }
+.coach-facts dt { font-size: 13px; font-weight: 600; color: var(--muted); }
+.coach-facts dd { margin: 2px 0 0; line-height: 1.4; font-variant-numeric: tabular-nums; }

@@ -1,5 +1,5 @@
 // genki app shell: four tabs (Today / Nutrition / Workouts / Progress) rendered into
-// (Today: the nutrition tiles, the weight card from weight-view.js and the
+// (Today: the nutrition tiles, the coach cards from coach-view.js, the weight card from weight-view.js and the
 // next-workout card from workouts-view.js; Progress: the week views from progress-view.js)
 // <main id="view">, and the Data & backup sheet (JSON export/import, and the
 // Sync section from sync-view.js).
@@ -16,6 +16,7 @@ import { dayKey } from "./nutrition.js";
 import { progressView, handleProgressClick, setProgressRerender } from "./progress-view.js";
 import { fastingCard, dayTrackersCard, handleTrackerClick, setTrackerRerender, initFastClock } from "./trackers-view.js";
 import { workoutsView, nextWorkoutCard, handleLiftClick, handleLiftInput, setLiftRerender, initRestTimer } from "./workouts-view.js";
+import { coachCards, handleCoachClick, setCoachRerender } from "./coach-view.js";
 import { initContrast, setContrast, contrastSection } from "./contrast.js";
 
 const TABS = ["today", "nutrition", "workouts", "progress"];
@@ -48,6 +49,7 @@ const RENDER = {
     <p class="sub">${esc(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }))}</p>
     ${storeError ? "" : await todayTiles()}
     <a class="btn ghost log-link" href="#nutrition">Log food</a>
+    ${storeError ? "" : await coachCards()}
     ${storeError ? "" : await fastingCard()}
     ${storeError ? "" : await dayTrackersCard()}
     ${storeError ? "" : await weightCard()}
@@ -88,6 +90,7 @@ setLiftRerender(() => render());
 initContrast();
 setProgressRerender(() => render());
 setTrackerRerender(() => render());
+setCoachRerender(() => render());
 initPanel();
 initRestTimer();
 initFastClock();
@@ -95,7 +98,7 @@ view.addEventListener("click", (e) => {
   const el = e.target.closest("[data-act]");
   if (!el || !view.contains(el)) return;
   const act = el.dataset.act;
-  const handler = act.startsWith("lift-") ? handleLiftClick : act.startsWith("w-") ? handleWeightClick : act.startsWith("p-") ? handleProgressClick : act.startsWith("t-") ? handleTrackerClick : handleViewClick;
+  const handler = act.startsWith("lift-") ? handleLiftClick : act.startsWith("w-") ? handleWeightClick : act.startsWith("p-") ? handleProgressClick : act.startsWith("t-") ? handleTrackerClick : act.startsWith("c-") ? handleCoachClick : handleViewClick;
   handler(act, el).catch((err) => alert(`That did not work: ${err.message}`));
 });
 // Typing in the workout set rows and picking from its selects.

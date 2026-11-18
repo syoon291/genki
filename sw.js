@@ -1,7 +1,7 @@
 // Offline support: the app shell is cached on install, then every same-origin
 // GET is served network first (fresh code when online), cache when offline.
-const CACHE = "genki-v6";
-const SHELL = ["./", "index.html", "styles.css", "app.js", "db.js", "backup.js", "sync.js", "sync-view.js", "merge.js", "ui.js", "contrast.js", "nutrition.js", "foods.js", "nutrition-view.js", "weight.js", "weight-view.js", "mfp.js", "workouts.js", "workouts-view.js", "progress.js", "progress-view.js", "trackers.js", "trackers-view.js", "foods/jp.json", "foods/us.json", "manifest.webmanifest", "icons/icon.svg", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png"];
+const CACHE = "genki-v7";
+const SHELL = ["./", "index.html", "styles.css", "app.js", "db.js", "backup.js", "sync.js", "sync-view.js", "merge.js", "ui.js", "contrast.js", "nutrition.js", "foods.js", "nutrition-view.js", "weight.js", "weight-view.js", "mfp.js", "workouts.js", "workouts-view.js", "progress.js", "progress-view.js", "trackers.js", "trackers-view.js", "coach.js", "coach-view.js", "foods/jp.json", "foods/us.json", "manifest.webmanifest", "icons/icon.svg", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
