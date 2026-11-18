@@ -16,7 +16,7 @@ All user data lives in the browser, in one IndexedDB database. It leaves the dev
 
 | Store | Key | Holds |
 |-------|-----|-------|
-| `meta` | `key` | Small app facts and settings as `{ key, value }`: `createdAt` (first open), `lastExportAt`, `lastImportAt`, `profile` (below), and the workout state: `liftPlan`, `liftNext`, `liftDraft`, `liftUnit`, `liftForm`, `liftFocus`, `liftlogImport` |
+| `meta` | `key` | Small app facts and settings as `{ key, value }`: `createdAt` (first open), `lastExportAt`, `lastImportAt`, `profile` (below), `fastPlan` and `waterGoal` (the day trackers, [trackers.md](trackers.md)), and the workout state: `liftPlan`, `liftNext`, `liftDraft`, `liftUnit`, `liftForm`, `liftFocus`, `liftlogImport` |
 | `entries` | `id` | The food log, one record per food eaten; index `date` (local day `YYYY-MM-DD`) (version 2) |
 | `myFoods` | `id` | The owner's saved foods, nutrients per serving (version 2) |
 | `weighIns` | `date` | Weigh-ins, at most one per local day (version 3). See [weight.md](weight.md) |
@@ -24,6 +24,8 @@ All user data lives in the browser, in one IndexedDB database. It leaves the dev
 | `nutritionWeeks` | `weekStart` | Imported weekly nutrition averages, read-only history (version 5). See [nutrition.md](nutrition.md#weekly-history) |
 | `deleted` | `id` | Tombstones, one per deleted record, so sync carries deletes (version 6): `{ id: "<store>:<key as JSON>", store, key, at (ISO time deleted) }`. See [sync.md](sync.md#how-the-merge-decides) |
 | `myMeals` | `id` | My meals: several foods saved as one item (version 7). See [nutrition.md](nutrition.md#my-meals) |
+| `days` | `date` | Day trackers, one record per local day: water and exercise (version 8). See [trackers.md](trackers.md) |
+| `fasts` | `id` | Fasts, finished and running (version 8). See [trackers.md](trackers.md#fasting) |
 
 Every record written through `put`, `putMany` or `setMeta` also carries `editedAt` (ISO time of that write), which sync's merge uses to keep the newer edit. Records written before version 6 have none until their next edit; the merge reads their own time instead.
 
@@ -36,6 +38,8 @@ Record shapes (what each field means is in [nutrition.md](nutrition.md)):
 - workout session: `{ id, date (ISO time finished), day (plan day name), sets: [{ exId (library id in workouts.js), w (kg, 0 for bodyweight), reps, rir|null }], minutes, source?: "liftlog" }`.
 - `liftPlan`: `{ goal, days, equip, level, split, created, schedule: [{ name, slots: [{ exId, main, sets, lo, hi, rir, rest (s) }] }] }` (Liftlog's shape). `liftNext`: index of the next day. `liftDraft`: the session in progress, `{ dayIdx, day, started (ms), entries: [{ exId, slot, sets: [{ w, reps, rir (typed text, in the shown unit), done }] }] }` or null. `liftUnit`: `"kg"`|`"lb"`. `liftForm`: the plan toggles. `liftFocus`: the trend chart's exercise. `liftlogImport`: when Liftlog data was brought over, or `"dismissed"`.
 - my food: `{ id, name, brand?, serving, grams|null, kcal, protein, fat, carbs, fiber|null, sugar|null, sodium|null, uses, lastUsed, createdAt, recipe?, importedAt? }`. Older records lack the three optional nutrients, which reads the same as null. A recipe adds `recipe: { servings, items: [item] }`; its numbers are the items' total per serving.
+- day: `{ date: "YYYY-MM-DD", water (glasses, 0-40), exerciseKcal|null, steps|null, exerciseSource?: "mfp" }` (null: not logged).
+- fast: `{ id, start (ISO), end (ISO, null while running), goalHours }`. `fastPlan`: `{ hours (1-72), startTime: "HH:MM" }`. `waterGoal`: glasses a day.
 - my meal: `{ id, name, items: [item], uses, lastUsed, createdAt, meal?, importedAt? }` (`meal`: the meal it was saved from, or the one Import My foods gave; older records lack it. `importedAt` from Import My foods). An item (of a my meal or a recipe) is an entry without its day, meal or id: `{ name, source, ref, amount, unit, base }`.
 
 Upgrades: `UPGRADES[n]` moves the database from version `n` to `n+1`, and opening runs every step from the stored version up. To add or change a store, bump that version number, append an upgrade step, and bump `SCHEMA` in `backup.js` to match. An upgrade step never drops or renames existing data: those records are on the owner's phone and in their backups.
@@ -51,7 +55,7 @@ The module exposes `get`, `getAll`, `getByIndex`, `put`, `putMany` (several reco
 ```json
 {
   "app": "genki",
-  "schema": 6,
+  "schema": 8,
   "exportedAt": "2026-01-02T03:04:05.000Z",
   "stores": { "meta": [{ "key": "createdAt", "value": "..." }] }
 }
@@ -64,11 +68,11 @@ The module exposes `get`, `getAll`, `getByIndex`, `put`, `putMany` (several reco
 - Export: `dumpAll()` wrapped by `buildBackup()`, downloaded as a file, then `setMeta("lastExportAt")`.
 - Import: `parseBackup()` against `storeNames()` and the key paths `db.js` exports (every record must carry its store's key), a confirm prompt, then `replaceAll()`. The replace is one transaction, so a failure part way (for example a record IndexedDB rejects; `replaceAll()` aborts the transaction) leaves the stored data untouched. Stores the file does not mention are left as they are, except the tombstones (`deleted`), which are always reset to the file's (none for a file without them), so this device's old deletes cannot drop imported records on the next sync. `lastImportAt` is set afterwards (best effort: a failure there does not undo the import).
 
-An older backup (lower `schema`) is accepted as is today: a schema 1 file only has `meta`, so importing it replaces `meta` (including any saved profile) and leaves the food log, my foods and weigh-ins as they are (a schema 2 file has no weigh-ins and a schema 3 file no workouts and a schema 4 file no weekly history and a schema 6 file no my meals, so it leaves those as they are; a schema 5 file has no tombstones, so importing it clears the device's). Schemas 6 and 7 changed no record shape (`editedAt` is an added field, and a record without it still merges; 7 only adds `myMeals`), so no migration is needed; once a later schema changes a record shape, `parseBackup` is where old files get migrated.
+An older backup (lower `schema`) is accepted as is today: a schema 1 file only has `meta`, so importing it replaces `meta` (including any saved profile) and leaves the food log, my foods and weigh-ins as they are (a schema 2 file has no weigh-ins and a schema 3 file no workouts and a schema 4 file no weekly history and a schema 6 file no my meals and a schema 7 file no day trackers, so it leaves those as they are; a schema 5 file has no tombstones, so importing it clears the device's). Schemas 6, 7 and 8 changed no record shape (`editedAt` is an added field, and a record without it still merges; 7 only adds `myMeals`, 8 only `days` and `fasts`), so no migration is needed; once a later schema changes a record shape, `parseBackup` is where old files get migrated.
 
 ## MyFitnessPal import
 
-A third way in, beside the backup file and sync: the Data & backup sheet reads a MyFitnessPal export's CSVs in the browser (`mfp.js`) and adds records with `putMany`, store by store: food-log entries, my foods, then weigh-ins. It only adds, apart from filling in fiber, sugar and sodium on entries and my foods an earlier import made (the rest of the record kept); it never clears a record. What it adds is in [nutrition.md](nutrition.md#myfitnesspal-import). No store or schema changed for it. **Import My foods** ([nutrition.md](nutrition.md#import-my-foods)) is the same kind of add-only path into `myFoods` and `myMeals`.
+A third way in, beside the backup file and sync: the Data & backup sheet reads a MyFitnessPal export's CSVs in the browser (`mfp.js`) and adds records with `putMany`, store by store: food-log entries, my foods, then weigh-ins. It only adds, apart from filling in fiber, sugar and sodium on entries and my foods an earlier import made (the rest of the record kept); it never clears a record. What it adds is in [nutrition.md](nutrition.md#myfitnesspal-import). Its exercise rows fill the `days` store (version 8). **Import My foods** ([nutrition.md](nutrition.md#import-my-foods)) is the same kind of add-only path into `myFoods` and `myMeals`.
 
 ## Device-only store
 

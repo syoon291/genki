@@ -69,3 +69,16 @@ test("rejects records without a valid key before anything is replaced", () => {
 test("countRecords counts per store", () => {
   assert.deepEqual(countRecords({ meta: [{}, {}], foods: [] }), { meta: 2, foods: 0 });
 });
+
+test("day trackers travel in a backup: days keyed by date, fasts by id (made-up values)", () => {
+  const stores = {
+    days: [{ date: "2026-03-01", water: 6, exerciseKcal: 250, steps: 7000 }],
+    fasts: [{ id: "f1", start: "2026-03-01T20:00:00.000Z", end: null, goalHours: 16 }],
+  };
+  const keys = { days: "date", fasts: "id" };
+  const r = parseBackup(JSON.stringify(buildBackup(stores, now)), ["days", "fasts"], keys);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.backup.stores, stores);
+  const bad = parseBackup(JSON.stringify(buildBackup({ days: [{ water: 2 }] }, now)), ["days"], keys);
+  assert.equal(bad.ok, false);
+});

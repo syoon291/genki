@@ -11,9 +11,10 @@ import { esc, initPanel, focusKey, restoreFocus } from "./ui.js";
 import { syncSection, handleSyncAct, handleSyncSubmit, setSyncHooks, clearSyncNote, autoSync } from "./sync-view.js";
 import { nutritionView, todayTiles, handleViewClick, setRerender } from "./nutrition-view.js";
 import { weightCard, handleWeightClick, setWeightRerender, syncProfileWeight } from "./weight-view.js";
-import { detectMfpFile, parseMfpNutrition, parseMfpWeights, planMfpImport, mfpConfirmText, planIsEmpty } from "./mfp.js";
+import { detectMfpFile, parseMfpNutrition, parseMfpWeights, parseMfpExercise, planMfpImport, mfpConfirmText, planIsEmpty } from "./mfp.js";
 import { dayKey } from "./nutrition.js";
 import { progressView, handleProgressClick, setProgressRerender } from "./progress-view.js";
+import { fastingCard, dayTrackersCard, handleTrackerClick, setTrackerRerender, initFastClock } from "./trackers-view.js";
 import { workoutsView, nextWorkoutCard, handleLiftClick, handleLiftInput, setLiftRerender, initRestTimer } from "./workouts-view.js";
 import { initContrast, setContrast, contrastSection } from "./contrast.js";
 
@@ -47,6 +48,8 @@ const RENDER = {
     <p class="sub">${esc(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }))}</p>
     ${storeError ? "" : await todayTiles()}
     <a class="btn ghost log-link" href="#nutrition">Log food</a>
+    ${storeError ? "" : await fastingCard()}
+    ${storeError ? "" : await dayTrackersCard()}
     ${storeError ? "" : await weightCard()}
     ${storeError ? "" : await nextWorkoutCard()}`,
   nutrition: () => (storeError ? `<h2>Nutrition</h2>` : nutritionView()),
@@ -84,13 +87,15 @@ setWeightRerender(() => render());
 setLiftRerender(() => render());
 initContrast();
 setProgressRerender(() => render());
+setTrackerRerender(() => render());
 initPanel();
 initRestTimer();
+initFastClock();
 view.addEventListener("click", (e) => {
   const el = e.target.closest("[data-act]");
   if (!el || !view.contains(el)) return;
   const act = el.dataset.act;
-  const handler = act.startsWith("lift-") ? handleLiftClick : act.startsWith("w-") ? handleWeightClick : act.startsWith("p-") ? handleProgressClick : handleViewClick;
+  const handler = act.startsWith("lift-") ? handleLiftClick : act.startsWith("w-") ? handleWeightClick : act.startsWith("p-") ? handleProgressClick : act.startsWith("t-") ? handleTrackerClick : handleViewClick;
   handler(act, el).catch((err) => alert(`That did not work: ${err.message}`));
 });
 // Typing in the workout set rows and picking from its selects.
@@ -141,7 +146,7 @@ async function renderSheet(message = "", tone = "") {
     <div class="stack">
       <button type="button" class="btn ghost" data-act="mfp">Import MyFitnessPal…</button>
     </div>
-    <p class="hint">Pick the CSV files from a MyFitnessPal export (Nutrition-Summary, Measurement-Summary). Each day's meals go into the food log, meals you had more than once become my foods, and weights fill days with no weigh-in. Nothing already here is replaced.</p>
+    <p class="hint">Pick the CSV files from a MyFitnessPal export (Nutrition-Summary, Measurement-Summary, Exercise-Summary). Each day's meals go into the food log, meals you had more than once become my foods, weights fill days with no weigh-in, and exercise calories and steps fill days with no exercise logged. Nothing already here is replaced.</p>
     <p class="msg ${tone}" role="status">${esc(message)}</p>
     ${contrastSection()}
     ${await syncSection()}`;
@@ -196,21 +201,22 @@ function pickMfp() {
 }
 
 async function importMfp(files) {
-  const meals = [], weights = [], ignored = [];
+  const meals = [], weights = [], exercise = [], ignored = [];
   let skipped = 0, unit = "lb";
   for (const file of files) {
     const text = await file.text();
     const kind = detectMfpFile(text);
     if (kind === "nutrition") { const r = parseMfpNutrition(text); meals.push(...r.rows); skipped += r.skipped.length; }
     else if (kind === "measurement") { const r = parseMfpWeights(text); weights.push(...r.rows); skipped += r.skipped.length; unit = r.unit; }
-    else if (kind === "exercise") ignored.push(`${file.name} is left out: genki does not keep exercise calories or steps.`);
+    else if (kind === "exercise") { const r = parseMfpExercise(text); exercise.push(...r.rows); skipped += r.skipped.length; }
     else ignored.push(`${file.name} is not a MyFitnessPal export file and is left out.`);
   }
-  const [entries, myFoods, weighIns] = await Promise.all([db.getAll("entries"), db.getAll("myFoods"), db.getAll("weighIns")]);
-  const plan = planMfpImport({ meals, weights, entries, myFoods, weighIns, today: dayKey() });
+  const [entries, myFoods, weighIns, days] = await Promise.all([db.getAll("entries"), db.getAll("myFoods"), db.getAll("weighIns"), db.getAll("days")]);
+  const plan = planMfpImport({ meals, weights, exercise, entries, myFoods, weighIns, days, today: dayKey() });
+  const found = meals.length || weights.length || exercise.length;
   if (planIsEmpty(plan)) {
-    const why = meals.length || weights.length ? "Everything in those files is already here." : "No meals or weights found in those files.";
-    await renderSheet(`${why} Nothing changed.${ignored.length ? ` ${ignored.join(" ")}` : ""}`, meals.length || weights.length ? "" : "bad");
+    const why = found ? "Everything in those files is already here." : "No meals, weights or exercise found in those files.";
+    await renderSheet(`${why} Nothing changed.${ignored.length ? ` ${ignored.join(" ")}` : ""}`, found ? "" : "bad");
     return;
   }
   if (!confirm(mfpConfirmText(plan, { ignored, skipped, unit }))) { await renderSheet("Import cancelled. Nothing changed."); return; }
@@ -218,10 +224,12 @@ async function importMfp(files) {
   if (entriesOut.length) await db.putMany("entries", entriesOut);
   if (foodsOut.length) await db.putMany("myFoods", foodsOut);
   if (plan.weighIns.length) { await db.putMany("weighIns", plan.weighIns); await syncProfileWeight(); }
+  if (plan.days.length) await db.putMany("days", plan.days);
   const done = [
     plan.entries.length ? `${plan.entries.length} ${plan.entries.length === 1 ? "meal" : "meals"}` : "",
     plan.myFoods.length ? `${plan.myFoods.length} ${plan.myFoods.length === 1 ? "my food" : "my foods"}` : "",
     plan.weighIns.length ? `${plan.weighIns.length} ${plan.weighIns.length === 1 ? "weigh-in" : "weigh-ins"}` : "",
+    plan.days.length ? `exercise on ${plan.days.length} ${plan.days.length === 1 ? "day" : "days"}` : "",
   ].filter(Boolean);
   const filled = plan.fillEntries.length + plan.fillFoods.length;
   const fillNote = filled ? `Filled in fiber, sugar and sodium on ${filled} ${filled === 1 ? "record" : "records"} imported before.` : "";

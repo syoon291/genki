@@ -12,7 +12,7 @@ status: current
 
 genki is a personal nutrition and workout tracker: an installable, offline-capable web app (PWA) built for a phone. It logs food against calorie and protein targets, tracks weigh-ins, and logs workouts against a plan, with one shared on-device store. There is no server, no account and no build step: the repo is the website, served by GitHub Pages. Personal data never enters this public repo; it stays in the browser's IndexedDB, in backup files the owner keeps, and (when the owner turns on sync) in their private repo genki-data.
 
-The product plan and its decisions live in the owner's knowledge hub, not here. Built so far: the app shell (four tabs), the store, JSON backup, nutrition (profile, calorie, protein, carb and fat targets, the food log with search over bundled Japanese and US food tables, recently logged, serving sizes and numbers of servings, adding to several days, the share of today's targets, frequently paired foods, quick add, my foods (with an import file), my meals and recipes, optional fiber, sugar and sodium), weigh-ins (7-day average, progress to goal, a chart, CSV import), and workouts ported from Liftlog (plan templates, set logging pre-filled from last time, a rest timer, PRs, strength trend and volume charts, Liftlog data import), sync to the owner's private GitHub repo (sync now, daily sync, restore on a new phone), and a Progress tab (a week's calories, macros, nutrients and weight, foods highest in a macro, a week CSV export).
+The product plan and its decisions live in the owner's knowledge hub, not here. Built so far: the app shell (four tabs), the store, JSON backup, nutrition (profile, calorie, protein, carb and fat targets, the food log with search over bundled Japanese and US food tables, recently logged, serving sizes and numbers of servings, adding to several days, the share of today's targets, frequently paired foods, quick add, my foods (with an import file), my meals and recipes, optional fiber, sugar and sodium), weigh-ins (7-day average, progress to goal, a chart, CSV import), and workouts ported from Liftlog (plan templates, set logging pre-filled from last time, a rest timer, PRs, strength trend and volume charts, Liftlog data import), sync to the owner's private GitHub repo (sync now, daily sync, restore on a new phone), a Progress tab (a week's calories, macros, nutrients and weight, foods highest in a macro, a week CSV export), and day trackers on the Today tab (fasting with a plan, a live timer, history and a streak; water glasses against a goal; exercise calories and steps with net calories).
 
 ## System Overview
 
@@ -24,6 +24,7 @@ The product plan and its decisions live in the owner's knowledge hub, not here. 
 | Weight | `weight.js`, `weight-view.js` | Weigh-in maths and CSV parsing (pure, unit-tested), the Today tab's weight card, chart and sheets. See [weight.md](weight.md) |
 | Workouts | `workouts.js`, `workouts-view.js` | Workout maths and the Liftlog migration (pure, unit-tested), the Workouts tab, the rest timer and the Today tab's next-workout card. See [workouts.md](workouts.md) |
 | Progress | `progress.js`, `progress-view.js` | Week totals, averages, macro split, foods highest in and the week CSV (pure, unit-tested), the Progress tab. See [progress.md](progress.md) |
+| Day trackers | `trackers.js`, `trackers-view.js` | Fasting, water and exercise maths (pure, unit-tested), the Today tab's Fasting, Water and Exercise cards and their sheets. See [trackers.md](trackers.md) |
 | Store | `db.js` | IndexedDB wrapper: versioned upgrades, get/put/delete, dump and atomic replace; the separate device-only database for the sync token. See [data-flow.md](data-flow.md) |
 | Sync | `sync.js`, `merge.js`, `sync-view.js` | GitHub Contents API calls for `app/latest.json` in the private genki-data repo (pure, unit-tested with a mocked fetch), the record-by-record merge with tombstones (pure), the Sync section of the Data & backup sheet and the daily sync. See [sync.md](sync.md) |
 | Backup format | `backup.js` | Builds and validates the JSON export file; pure functions, unit-tested. See [data-flow.md](data-flow.md) |
@@ -31,7 +32,7 @@ The product plan and its decisions live in the owner's knowledge hub, not here. 
 | Offline + install | `sw.js`, `manifest.webmanifest`, `icons/` | Service worker caches the app for offline use; the manifest and icons make it installable. See [deployment.md](deployment.md) |
 | Tests and checks | `tests/`, `scripts/`, `package.json` | Unit tests (Node's built-in runner), a fast repo check (including the color contrast floors), and the food-table build script; `package.json` has no dependencies and only marks the scripts as ES modules. See [local-dev.md](local-dev.md) |
 
-How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), which imports `db.js`, `backup.js`, `ui.js`, `contrast.js` (the High contrast setting), `mfp.js` (the MyFitnessPal import), `sync-view.js` (which imports `sync.js` and `merge.js`), `weight-view.js` (which imports `weight.js`), `workouts-view.js` (which imports `workouts.js`), `progress-view.js` (which imports `progress.js`) and `nutrition-view.js` (which imports `nutrition.js` and `foods.js`, and fetches the food tables from `foods/` on first use). On start, `app.js` opens the IndexedDB database (creating or upgrading it), renders the tab named in the URL hash, runs the daily sync when it is due, and registers `sw.js` when served over https.
+How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), which imports `db.js`, `backup.js`, `ui.js`, `contrast.js` (the High contrast setting), `mfp.js` (the MyFitnessPal import), `sync-view.js` (which imports `sync.js` and `merge.js`), `weight-view.js` (which imports `weight.js`), `workouts-view.js` (which imports `workouts.js`), `progress-view.js` (which imports `progress.js`), `trackers-view.js` (which imports `trackers.js`) and `nutrition-view.js` (which imports `nutrition.js` and `foods.js`, and fetches the food tables from `foods/` on first use). On start, `app.js` opens the IndexedDB database (creating or upgrading it), renders the tab named in the URL hash, runs the daily sync when it is due, and registers `sw.js` when served over https.
 
 ## Repository Layout
 
@@ -51,6 +52,8 @@ How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), wh
 ├── workouts-view.js       Workouts tab, rest timer, Today card
 ├── progress.js            week totals, split, top foods, CSV (pure, tested)
 ├── progress-view.js       Progress tab
+├── trackers.js            fasting, water, exercise maths (pure, tested)
+├── trackers-view.js       Today fasting, water, exercise cards
 ├── foods/                 bundled food tables (built, committed)
 ├── db.js                  IndexedDB store
 ├── backup.js              export/import format (pure, tested)
@@ -86,6 +89,7 @@ How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), wh
 | [Weight](weight.md) | Weigh-ins, the 7-day average, progress to goal, the chart, CSV import |
 | [Workouts](workouts.md) | Plans, set logging, progression, PRs and charts, the Liftlog migration |
 | [Progress](progress.md) | The Progress tab: week views, foods highest in, the week CSV export |
+| [Day trackers](trackers.md) | Fasting (plan, timer, history, streak), water, exercise and net calories |
 | [Data Flow](data-flow.md) | The IndexedDB store, upgrades, the backup file format, export and import, the device-only store |
 | [Sync](sync.md) | The token, sync now and the daily sync, restore, the Content Security Policy |
 | [Design System](design-system.md) | Color tokens, type, components, voice of the copy |

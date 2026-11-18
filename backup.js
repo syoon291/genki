@@ -4,7 +4,7 @@
 
 export const APP_ID = "genki";
 // Bump with DB_VERSION in db.js whenever the stores change shape.
-export const SCHEMA = 7;
+export const SCHEMA = 8;
 
 // dump: { storeName: [records...] }
 export function buildBackup(dump, now = new Date()) {
