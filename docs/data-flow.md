@@ -2,6 +2,7 @@
 owns:
   - db.js
   - backup.js
+  - merge.js
 status: current
 ---
 
@@ -21,6 +22,9 @@ All user data lives in the browser, in one IndexedDB database. It leaves the dev
 | `weighIns` | `date` | Weigh-ins, at most one per local day (version 3). See [weight.md](weight.md) |
 | `workouts` | `id` | Finished workout sessions (version 4). See [workouts.md](workouts.md) |
 | `nutritionWeeks` | `weekStart` | Imported weekly nutrition averages, read-only history (version 5). See [nutrition.md](nutrition.md#weekly-history) |
+| `deleted` | `id` | Tombstones, one per deleted record, so sync carries deletes (version 6): `{ id: "<store>:<key as JSON>", store, key, at (ISO time deleted) }`. See [sync.md](sync.md#how-the-merge-decides) |
+
+Every record written through `put`, `putMany` or `setMeta` also carries `editedAt` (ISO time of that write), which sync's merge uses to keep the newer edit. Records written before version 6 have none until their next edit; the merge reads their own time instead.
 
 Record shapes (what each field means is in [nutrition.md](nutrition.md)):
 
@@ -36,7 +40,7 @@ Upgrades: `UPGRADES[n]` moves the database from version `n` to `n+1`, and openin
 
 If another tab opens a newer version, this tab closes its connection so the upgrade can run; an older tab that blocks an upgrade gets an error asking to close it.
 
-The module exposes `get`, `getAll`, `getByIndex`, `put`, `putMany` (several records in one transaction), `del`, `getMeta`/`setMeta`, `storeNames`, `dumpAll` (every record of every store) and `replaceAll` (clear and refill the named stores in one transaction).
+The module exposes `get`, `getAll`, `getByIndex`, `put`, `putMany` (several records in one transaction; both stamp `editedAt`), `del`/`delMany` (delete and leave a tombstone per record, in one transaction), `getMeta`/`setMeta`, `storeNames`, `dumpAll` (every record of every store, tombstones included), `replaceAll` (clear and refill the named stores in one transaction, and always reset the tombstones to the file's own, none when it has none; no stamps, no new tombstones) and `applyChanges` (write a sync merge's changes, skipping records edited since the merge began, and returning `{ applied, skipped }`; [sync.md](sync.md#how-the-merge-decides)). Code that removes records uses `del`/`delMany`, never `replaceAll` with an empty list, or sync would bring them back.
 
 ## Backup file
 
@@ -45,7 +49,7 @@ The module exposes `get`, `getAll`, `getByIndex`, `put`, `putMany` (several reco
 ```json
 {
   "app": "genki",
-  "schema": 5,
+  "schema": 6,
   "exportedAt": "2026-01-02T03:04:05.000Z",
   "stores": { "meta": [{ "key": "createdAt", "value": "..." }] }
 }
@@ -56,9 +60,9 @@ The module exposes `get`, `getAll`, `getByIndex`, `put`, `putMany` (several reco
 ## Export and import
 
 - Export: `dumpAll()` wrapped by `buildBackup()`, downloaded as a file, then `setMeta("lastExportAt")`.
-- Import: `parseBackup()` against `storeNames()` and the key paths `db.js` exports (every record must carry its store's key), a confirm prompt, then `replaceAll()`. The replace is one transaction, so a failure part way (for example a record IndexedDB rejects; `replaceAll()` aborts the transaction) leaves the stored data untouched. Stores the file does not mention are left as they are. `lastImportAt` is set afterwards (best effort: a failure there does not undo the import).
+- Import: `parseBackup()` against `storeNames()` and the key paths `db.js` exports (every record must carry its store's key), a confirm prompt, then `replaceAll()`. The replace is one transaction, so a failure part way (for example a record IndexedDB rejects; `replaceAll()` aborts the transaction) leaves the stored data untouched. Stores the file does not mention are left as they are, except the tombstones (`deleted`), which are always reset to the file's (none for a file without them), so this device's old deletes cannot drop imported records on the next sync. `lastImportAt` is set afterwards (best effort: a failure there does not undo the import).
 
-An older backup (lower `schema`) is accepted as is today: a schema 1 file only has `meta`, so importing it replaces `meta` (including any saved profile) and leaves the food log, my foods and weigh-ins as they are (a schema 2 file has no weigh-ins and a schema 3 file no workouts and a schema 4 file no weekly history, so it leaves those as they are); once a later schema changes a record shape, `parseBackup` is where old files get migrated.
+An older backup (lower `schema`) is accepted as is today: a schema 1 file only has `meta`, so importing it replaces `meta` (including any saved profile) and leaves the food log, my foods and weigh-ins as they are (a schema 2 file has no weigh-ins and a schema 3 file no workouts and a schema 4 file no weekly history so it leaves those as they are; a schema 5 file has no tombstones, so importing it clears the device's). Schema 6 changed no record shape (`editedAt` is an added field, and a record without it still merges), so no migration is needed; once a later schema changes a record shape, `parseBackup` is where old files get migrated.
 
 ## MyFitnessPal import
 

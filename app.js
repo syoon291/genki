@@ -5,7 +5,8 @@
 // Sync section from sync-view.js).
 // The tab is kept in the URL hash so a reload stays where you were.
 import * as db from "./db.js";
-import { buildBackup, backupFileName, parseBackup, countRecords } from "./backup.js";
+import { buildBackup, backupFileName, parseBackup } from "./backup.js";
+import { recordCount } from "./merge.js";
 import { esc, initPanel, focusKey, restoreFocus } from "./ui.js";
 import { syncSection, handleSyncAct, handleSyncSubmit, setSyncHooks, clearSyncNote, autoSync } from "./sync-view.js";
 import { nutritionView, todayTiles, handleViewClick, setRerender } from "./nutrition-view.js";
@@ -107,16 +108,15 @@ function fmtDate(iso) {
 }
 
 async function renderSheet(message = "", tone = "") {
-  let counts = {}, lastExport = null, lastImport = null;
+  let total = 0, lastExport = null, lastImport = null;
   try {
-    counts = countRecords(await db.dumpAll());
+    total = recordCount(await db.dumpAll());
     lastExport = await db.getMeta("lastExportAt", null);
     lastImport = await db.getMeta("lastImportAt", null);
   } catch (e) {
     message = message || `Storage is unavailable: ${e.message}`;
     tone = "bad";
   }
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
   sheet.innerHTML = `
     <div class="sheet-head">
       <h2 id="data-title">Data &amp; backup</h2>
@@ -158,8 +158,7 @@ async function doExport() {
 async function doImport(file) {
   const parsed = parseBackup(await file.text(), await db.storeNames(), db.KEY_PATHS);
   if (!parsed.ok) { await renderSheet(parsed.error, "bad"); return; }
-  const counts = countRecords(parsed.backup.stores);
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const total = recordCount(parsed.backup.stores);
   const when = parsed.backup.exportedAt ? ` from ${fmtDate(parsed.backup.exportedAt)}` : "";
   if (!confirm(`Replace the data on this device with the backup${when} (${total} records)? This cannot be undone.`)) {
     await renderSheet("Import cancelled. Nothing changed.");

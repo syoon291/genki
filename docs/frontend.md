@@ -47,7 +47,7 @@ The header's download button opens a `<dialog>` (a bottom sheet on a phone, cent
 - **Import backup...** picks a file, validates it (see [data-flow.md](data-flow.md#backup-file)), shows the error in the sheet if it is not a valid backup, otherwise asks for confirmation and replaces the stored data with the backup's.
 - **Import MyFitnessPal...** picks one or more CSV files from a MyFitnessPal export, asks for confirmation with what it will add, then adds the meals, my foods and weigh-ins (see [nutrition.md](nutrition.md#myfitnesspal-import)). The result or the reason nothing changed shows in the sheet's status line.
 
-Below them is the **Sync** section (`sync-view.js`, see [sync.md](sync.md)): a token field until a token is saved, then the last sync time and Sync now, Restore from genki-data... and Remove token, with its own status line. The sheet scrolls inside itself when it is taller than the screen.
+Below them is the **Sync** section (`sync-view.js`, see [sync.md](sync.md)): a token field until a token is saved, then the last sync time, a line saying that a sync merges, and Sync now, Restore from genki-data... and Remove token, with its own status line. The sheet scrolls inside itself when it is taller than the screen.
 
 Tapping the backdrop or the close button closes the sheet. Messages appear in a status line inside the sheet.
 

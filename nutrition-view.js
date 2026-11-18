@@ -640,7 +640,7 @@ async function openWeeks(message = "", tone = "") {
     click: async (act) => {
       if (act === "import") pickWeeksCsv();
       if (act === "clear" && confirm(`Remove all ${weeks.length} imported weeks? Your food log is not touched. This cannot be undone.`)) {
-        await db.replaceAll({ nutritionWeeks: [] });
+        await db.delMany("nutritionWeeks", weeks.map((w) => w.weekStart));
         await openWeeks("Weekly history removed.", "good");
       }
     },
