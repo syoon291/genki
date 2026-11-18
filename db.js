@@ -1,12 +1,13 @@
 // IndexedDB store: one database ("genki"), one object store per kind of data.
 // Later phases add stores by bumping DB_VERSION (and SCHEMA in backup.js) and
 // adding a step to UPGRADES; existing data is never dropped by an upgrade.
+import { TOMBSTONES, tombstoneId, withTombstones } from "./merge.js";
 
 export const DB_NAME = "genki";
-export const DB_VERSION = 5;
+export const DB_VERSION = 6;
 
 // The keyPath of each store, so a backup can be checked before it replaces anything.
-export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id", weighIns: "date", workouts: "id", nutritionWeeks: "weekStart" };
+export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id", weighIns: "date", workouts: "id", nutritionWeeks: "weekStart", [TOMBSTONES]: "id" };
 
 // UPGRADES[n] moves a database from version n to n+1.
 const UPGRADES = [
@@ -32,6 +33,11 @@ const UPGRADES = [
     // Imported weekly nutrition averages (read-only history), keyed by the week's first day:
     // { weekStart, weekEnd, kcal, protein, carbs, fat, fiber, carbPct, fatPct, proteinPct, at }.
     db.createObjectStore("nutritionWeeks", { keyPath: KEY_PATHS.nutritionWeeks });
+  },
+  (db) => {
+    // Tombstones, so sync carries deletions: { id: "<store>:<key as JSON>", store, key, at (ISO time deleted) }.
+    // Existing records need no change: until their next edit, merge.js reads their own time.
+    db.createObjectStore(TOMBSTONES, { keyPath: KEY_PATHS[TOMBSTONES] });
   },
 ];
 
@@ -92,10 +98,13 @@ export async function getByIndex(store, index, value) {
   return result(db.transaction(store).objectStore(store).index(index).getAll(value));
 }
 
+// Every write stamps editedAt (ISO time) on the record: sync's merge keeps the newer edit.
+const stamped = (record, at) => ({ ...record, editedAt: at });
+
 export async function put(store, record) {
   const db = await openDB();
   const tx = db.transaction(store, "readwrite");
-  tx.objectStore(store).put(record);
+  tx.objectStore(store).put(stamped(record, new Date().toISOString()));
   return done(tx);
 }
 
@@ -104,15 +113,49 @@ export async function putMany(store, records) {
   const db = await openDB();
   const tx = db.transaction(store, "readwrite");
   const os = tx.objectStore(store);
-  for (const r of records) os.put(r);
+  const at = new Date().toISOString();
+  for (const r of records) os.put(stamped(r, at));
   return done(tx);
 }
 
-export async function del(store, key) {
+// Delete records and leave a tombstone for each, so a sync removes them from
+// genki-data (and other devices) instead of bringing them back.
+export async function delMany(store, keys) {
   const db = await openDB();
-  const tx = db.transaction(store, "readwrite");
-  tx.objectStore(store).delete(key);
+  const tx = db.transaction([store, TOMBSTONES], "readwrite");
+  const os = tx.objectStore(store), ts = tx.objectStore(TOMBSTONES);
+  const at = new Date().toISOString();
+  for (const key of keys) {
+    os.delete(key);
+    ts.put({ id: tombstoneId(store, key), store, key, at });
+  }
   return done(tx);
+}
+
+export const del = (store, key) => delMany(store, [key]);
+
+// Apply sync's merge result (merge.js diffStores) in one transaction, without
+// stamping or tombstoning (the merged records and tombstones carry their own).
+// A record that changed on this device since the dump the merge started from
+// is left alone: the next sync carries that edit. Returns how many records
+// (not counting tombstones) changed.
+export async function applyChanges(changes) {
+  if (!changes.length) return { applied: 0, skipped: 0 };
+  const db = await openDB();
+  const tx = db.transaction([...new Set(changes.map((c) => c.store))], "readwrite");
+  const finished = done(tx);
+  let applied = 0, skipped = 0;
+  for (const c of changes) {
+    const os = tx.objectStore(c.store);
+    const req = os.get(c.key);
+    req.onsuccess = () => {
+      if (JSON.stringify(req.result ?? null) !== JSON.stringify(c.before ?? null)) { skipped++; return; }
+      if (c.after) os.put(c.after); else os.delete(c.key);
+      if (c.store !== TOMBSTONES) applied++;
+    };
+  }
+  await finished;
+  return { applied, skipped };
 }
 
 export async function getMeta(key, fallback) {
@@ -136,11 +179,12 @@ export async function dumpAll() {
 
 // Replace the contents of every store named in `stores` in one transaction:
 // either the whole import lands or none of it does. Stores the backup does not
-// mention are left as they are.
-export async function replaceAll(stores) {
+// mention are left as they are, except the tombstones: they are always reset to
+// the file's own (withTombstones).
+export async function replaceAll(fileStores) {
   const db = await openDB();
+  const stores = withTombstones(fileStores);
   const names = Object.keys(stores);
-  if (!names.length) return;
   const tx = db.transaction(names, "readwrite");
   const finished = done(tx);
   try {

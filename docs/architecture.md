@@ -24,13 +24,13 @@ The product plan and its decisions live in the owner's knowledge hub, not here. 
 | Weight | `weight.js`, `weight-view.js` | Weigh-in maths and CSV parsing (pure, unit-tested), the Today tab's weight card, chart and sheets. See [weight.md](weight.md) |
 | Workouts | `workouts.js`, `workouts-view.js` | Workout maths and the Liftlog migration (pure, unit-tested), the Workouts tab, the rest timer and the Today tab's next-workout card. See [workouts.md](workouts.md) |
 | Store | `db.js` | IndexedDB wrapper: versioned upgrades, get/put/delete, dump and atomic replace; the separate device-only database for the sync token. See [data-flow.md](data-flow.md) |
-| Sync | `sync.js`, `sync-view.js` | GitHub Contents API calls for `app/latest.json` in the private genki-data repo (pure, unit-tested with a mocked fetch), the Sync section of the Data & backup sheet and the daily sync. See [sync.md](sync.md) |
+| Sync | `sync.js`, `merge.js`, `sync-view.js` | GitHub Contents API calls for `app/latest.json` in the private genki-data repo (pure, unit-tested with a mocked fetch), the record-by-record merge with tombstones (pure), the Sync section of the Data & backup sheet and the daily sync. See [sync.md](sync.md) |
 | Backup format | `backup.js` | Builds and validates the JSON export file; pure functions, unit-tested. See [data-flow.md](data-flow.md) |
 | Styles | `styles.css` | Color tokens (light + dark), layout, components. See [design-system.md](design-system.md) |
 | Offline + install | `sw.js`, `manifest.webmanifest`, `icons/` | Service worker caches the app for offline use; the manifest and icons make it installable. See [deployment.md](deployment.md) |
 | Tests and checks | `tests/`, `scripts/`, `package.json` | Unit tests (Node's built-in runner), a fast repo check, and the food-table build script; `package.json` has no dependencies and only marks the scripts as ES modules. See [local-dev.md](local-dev.md) |
 
-How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), which imports `db.js`, `backup.js`, `ui.js`, `mfp.js` (the MyFitnessPal import), `sync-view.js` (which imports `sync.js`), `weight-view.js` (which imports `weight.js`), `workouts-view.js` (which imports `workouts.js`) and `nutrition-view.js` (which imports `nutrition.js` and `foods.js`, and fetches the food tables from `foods/` on first use). On start, `app.js` opens the IndexedDB database (creating or upgrading it), renders the tab named in the URL hash, runs the daily sync when it is due, and registers `sw.js` when served over https.
+How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), which imports `db.js`, `backup.js`, `ui.js`, `mfp.js` (the MyFitnessPal import), `sync-view.js` (which imports `sync.js` and `merge.js`), `weight-view.js` (which imports `weight.js`), `workouts-view.js` (which imports `workouts.js`) and `nutrition-view.js` (which imports `nutrition.js` and `foods.js`, and fetches the food tables from `foods/` on first use). On start, `app.js` opens the IndexedDB database (creating or upgrading it), renders the tab named in the URL hash, runs the daily sync when it is due, and registers `sw.js` when served over https.
 
 ## Repository Layout
 
@@ -52,6 +52,7 @@ How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), wh
 ├── backup.js              export/import format (pure, tested)
 ├── sync.js                GitHub sync calls (pure, tested)
 ├── sync-view.js           Sync section, daily sync
+├── merge.js               Sync merge: per-record, newer edit wins, tombstones
 ├── styles.css             design tokens + components
 ├── sw.js                  service worker (offline cache)
 ├── manifest.webmanifest   install metadata

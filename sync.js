@@ -90,27 +90,48 @@ export async function fetchRemote(token, fetchFn = fetch) {
   return { sha, text: await res.text() };
 }
 
-// Write `text` to app/latest.json. `sha` is the version this device last saw
-// (null for a new file). If the file moved on since, GitHub answers 409 (or
-// 422 when a sha was needed but missing): fetch the current sha and try again.
-// Returns the new sha.
+// One PUT of `text` to app/latest.json over version `sha` (null for a new file).
+// Returns { sha } on success, or { conflict: true } when the file moved on
+// since (GitHub answers 409, or 422 when a sha was needed but missing).
+async function putOnce(token, text, sha, fetchFn, message) {
+  const body = { message, content: toBase64(text) };
+  if (sha) body.sha = sha;
+  const res = await call(fetchFn, FILE_URL, { method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (res.ok) {
+    const out = await res.json();
+    const next = out?.content?.sha;
+    if (typeof next !== "string") throw new SyncError("GitHub saved the file but sent an unexpected answer.");
+    return { sha: next };
+  }
+  if (res.status === 409 || res.status === 422) return { conflict: true };
+  throw await failure(res, "save app/latest.json");
+}
+
+// Write `text` to app/latest.json over whatever is there: on a conflict, fetch
+// the current sha and try again. Returns the new sha. (Sync uses mergeSync,
+// which never writes over a version it has not merged.)
 export async function pushFile(token, text, sha, { fetchFn = fetch, message = "genki sync" } = {}) {
   let current = sha;
   for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-    const body = { message, content: toBase64(text) };
-    if (current) body.sha = current;
-    const res = await call(fetchFn, FILE_URL, { method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (res.ok) {
-      const out = await res.json();
-      const next = out?.content?.sha;
-      if (typeof next !== "string") throw new SyncError("GitHub saved the file but sent an unexpected answer.");
-      return next;
-    }
-    if ((res.status === 409 || res.status === 422) && attempt < MAX_TRIES) {
-      current = await remoteSha(token, fetchFn);
-      continue;
-    }
-    throw await failure(res, "save app/latest.json");
+    const out = await putOnce(token, text, current, fetchFn, message);
+    if (!out.conflict) return out.sha;
+    if (attempt < MAX_TRIES) current = await remoteSha(token, fetchFn);
+  }
+  throw new SyncError("GitHub kept reporting a conflict. Try again in a minute.");
+}
+
+// The merging sync: fetch app/latest.json, let `build(remote)` turn it
+// ({ sha, text } or null when there is no file yet) into the text to write,
+// and PUT that over exactly the version it was built from. If another write
+// landed in between (a conflict), fetch and build again, up to three times, so
+// nothing written elsewhere is ever overwritten unmerged. Returns
+// { sha (the new version), remote (what the written text was built from) }.
+export async function mergeSync(token, build, { fetchFn = fetch, message = "genki sync" } = {}) {
+  for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+    const remote = await fetchRemote(token, fetchFn);
+    const text = await build(remote);
+    const out = await putOnce(token, text, remote?.sha ?? null, fetchFn, message);
+    if (!out.conflict) return { sha: out.sha, remote };
   }
   throw new SyncError("GitHub kept reporting a conflict. Try again in a minute.");
 }

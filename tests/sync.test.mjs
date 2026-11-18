@@ -1,7 +1,7 @@
 // Sync against a mocked GitHub: no network, and only made-up tokens and data.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { REPO, PATH, checkAccess, remoteSha, fetchRemote, pushFile, syncDue, looksLikeToken, toBase64, SyncError } from "../sync.js";
+import { REPO, PATH, checkAccess, remoteSha, fetchRemote, pushFile, mergeSync, syncDue, looksLikeToken, toBase64, SyncError } from "../sync.js";
 
 const TOKEN = "github_pat_FAKE0000000000000000000000";
 const FILE = `https://api.github.com/repos/${REPO}/contents/${PATH}`;
@@ -141,4 +141,80 @@ test("looksLikeToken accepts fine-grained tokens only", () => {
   assert.equal(looksLikeToken(TOKEN), true);
   assert.equal(looksLikeToken("ghp_FAKE000000000000000000000000"), false);
   for (const s of ["", "password", "github_pat_short", "github_pat_ has spaces 00000000000"]) assert.equal(looksLikeToken(s), false);
+});
+
+// ---------- mergeSync ----------
+
+test("mergeSync with no file yet builds from nothing and creates it", async () => {
+  const gh = fakeGitHub();
+  const seen = [];
+  const out = await mergeSync(TOKEN, (remote) => { seen.push(remote); return "first"; }, { fetchFn: gh.fetch });
+  assert.deepEqual(seen, [null]);
+  assert.equal(out.sha, "sha1");
+  assert.equal(gh.file.text, "first");
+  assert.equal(JSON.parse(gh.calls.find((c) => c.method === "PUT").init.body).sha, undefined);
+});
+
+test("mergeSync builds from the current file and writes over exactly that version", async () => {
+  const gh = fakeGitHub({ file: { sha: "v1", text: "remote-copy" } });
+  const out = await mergeSync(TOKEN, (remote) => `${remote.text}+mine`, { fetchFn: gh.fetch, message: "genki sync test" });
+  assert.equal(gh.file.text, "remote-copy+mine");
+  assert.equal(out.remote.sha, "v1");
+  const put = JSON.parse(gh.calls.find((c) => c.method === "PUT").init.body);
+  assert.equal(put.sha, "v1");
+  assert.equal(put.message, "genki sync test");
+});
+
+test("mergeSync never overwrites a write that landed in between: it merges again", async () => {
+  const gh = fakeGitHub({ file: { sha: "v1", text: "A" } });
+  let raced = false;
+  const fetchFn = async (url, init = {}) => {
+    // Another device writes just before this device's first PUT arrives.
+    if (init.method === "PUT" && !raced) { raced = true; gh.file = { sha: "v2", text: "A+other" }; }
+    return gh.fetch(url, init);
+  };
+  const built = [];
+  const out = await mergeSync(TOKEN, (remote) => { built.push(remote.text); return `${remote.text}+mine`; }, { fetchFn });
+  assert.deepEqual(built, ["A", "A+other"]);
+  assert.equal(gh.file.text, "A+other+mine");
+  assert.equal(out.remote.sha, "v2");
+});
+
+test("mergeSync writes nothing when building fails", async () => {
+  const gh = fakeGitHub({ file: { sha: "v1", text: "unreadable" } });
+  await assert.rejects(mergeSync(TOKEN, () => { throw new Error("cannot use it"); }, { fetchFn: gh.fetch }), /cannot use it/);
+  assert.equal(gh.calls.filter((c) => c.method === "PUT").length, 0);
+  assert.equal(gh.file.text, "unreadable");
+});
+
+test("mergeSync gives up after three conflicts with a message to show", async () => {
+  const gh = fakeGitHub({ file: { sha: "v1", text: "A" }, status: { PUT: [409, 409, 409] } });
+  await assert.rejects(mergeSync(TOKEN, (r) => r.text, { fetchFn: gh.fetch }), (e) => e instanceof SyncError && /conflict/.test(e.message));
+  assert.equal(gh.file.text, "A");
+});
+
+test("two devices syncing in turn keep each other's records and deletes", async () => {
+  const { mergeStores, tombstoneId } = await import("../merge.js");
+  const { buildBackup, parseBackup } = await import("../backup.js");
+  const { KEY_PATHS } = await import("../db.js");
+  const names = Object.keys(KEY_PATHS);
+  const gh = fakeGitHub();
+  const at = (h) => `2026-03-01T0${h}:00:00.000Z`;
+  const sync = async (local) => {
+    let merged = local;
+    await mergeSync(TOKEN, (remote) => {
+      merged = remote ? mergeStores(local, parseBackup(remote.text, names, KEY_PATHS).backup.stores, KEY_PATHS) : local;
+      return JSON.stringify(buildBackup(merged));
+    }, { fetchFn: gh.fetch });
+    return merged;
+  };
+  // Phone logs lunch and a weigh-in; tablet logs dinner.
+  let phone = await sync({ entries: [{ id: "lunch", editedAt: at(1) }], weighIns: [{ date: "2026-03-01", kg: 70, at: at(1) }], deleted: [] });
+  let tablet = await sync({ entries: [{ id: "dinner", editedAt: at(2) }], deleted: [] });
+  assert.deepEqual(tablet.entries.map((e) => e.id).sort(), ["dinner", "lunch"]);
+  // The phone deletes the weigh-in, then syncs: the tablet's next sync drops it too.
+  phone = await sync({ ...phone, weighIns: [], deleted: [{ id: tombstoneId("weighIns", "2026-03-01"), store: "weighIns", key: "2026-03-01", at: at(3) }] });
+  assert.deepEqual(phone.entries.map((e) => e.id).sort(), ["dinner", "lunch"]);
+  tablet = await sync(tablet);
+  assert.deepEqual(tablet.weighIns, []);
 });

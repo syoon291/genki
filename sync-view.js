@@ -2,9 +2,10 @@
 // The token and the sync state live in the device-only database (db.js
 // getDevice/setDevice), never in the stores a backup carries.
 import * as db from "./db.js";
-import { buildBackup, parseBackup, countRecords } from "./backup.js";
+import { buildBackup, parseBackup } from "./backup.js";
+import { mergeStores, diffStores, recordCount } from "./merge.js";
 import { esc } from "./ui.js";
-import { REPO, PATH, checkAccess, fetchRemote, pushFile, syncDue, looksLikeToken } from "./sync.js";
+import { REPO, PATH, checkAccess, fetchRemote, mergeSync, syncDue, looksLikeToken } from "./sync.js";
 
 // Device keys: syncToken, syncSha (the file version this device last wrote or
 // restored: set means this device is linked and may auto-sync), lastSyncedAt,
@@ -60,7 +61,7 @@ export async function syncSection() {
         <div><dt>Last synced</dt><dd>${esc(fmt(lastSyncedAt))}</dd></div>
       </dl>
       ${lastError ? `<p class="hint">Last automatic sync failed: ${esc(lastError)}</p>` : ""}
-      ${linked ? `<p class="hint">Syncs on its own once a day when you open genki.</p>` : `<p class="hint">Sync now or restore once to turn on the daily sync.</p>`}
+      ${linked ? `<p class="hint">Syncs on its own once a day when you open genki. A sync merges: records from both sides are kept, the newer edit wins, and deletes carry over.</p>` : `<p class="hint">Sync now or restore once to turn on the daily sync.</p>`}
       <div class="stack">
         <button type="button" class="btn" data-act="sync-now"${busy ? " disabled" : ""}>Sync now</button>
         <button type="button" class="btn ghost" data-act="sync-restore"${busy ? " disabled" : ""}>Restore from genki-data…</button>
@@ -96,7 +97,7 @@ export function handleSyncSubmit(form) {
     let remote;
     try { remote = await fetchRemote(token); }
     catch (e) { say(`Token saved, but could not read genki-data yet: ${e.message}`, "bad"); return; }
-    say(remote ? "Token saved. genki-data already has a backup: restore it to this device, or sync now to replace it." : "Token saved. Sync now to make the first copy.", "good");
+    say(remote ? "Token saved. genki-data already has a backup: sync now to merge it with the data on this device." : "Token saved. Sync now to make the first copy.", "good");
   });
   return true;
 }
@@ -116,35 +117,57 @@ export function handleSyncAct(act) {
 }
 
 function summary(backup) {
-  const total = Object.values(countRecords(backup.stores)).reduce((a, b) => a + b, 0);
+  const total = recordCount(backup.stores);
   const when = backup.exportedAt ? ` from ${fmt(backup.exportedAt)}` : "";
   return { total, when };
 }
 
-// Write this device's data to app/latest.json. A device that is not linked yet
-// (never synced or restored here) asks before replacing a file already there,
-// so a fresh phone never overwrites the real copy with an empty one.
+// Merge this device's data with app/latest.json record by record (merge.js),
+// write the merged copy back and apply it here. A device that is not linked
+// yet (never synced or restored here) asks before merging into a file already
+// there, so a fresh phone never touches the real copy unasked.
 async function syncNow({ interactive }) {
   const token = await db.getDevice("syncToken", null);
   if (!token) throw new Error("No token saved.");
-  let sha = await db.getDevice("syncSha", null);
-  if (!sha) {
+  if (!(await db.getDevice("syncSha", null))) {
     if (!interactive) return;
     const remote = await fetchRemote(token);
     if (remote) {
       const parsed = parseBackup(remote.text, await db.storeNames(), db.KEY_PATHS);
       const what = parsed.ok ? (({ total, when }) => `${when} (${total} records)`)(summary(parsed.backup)) : "";
-      if (!confirm(`genki-data already has a backup${what}. Replace it with the data on this device?`)) { say("Sync cancelled. Nothing changed."); return; }
-      sha = remote.sha;
+      if (!confirm(`genki-data already has a backup${what}. Merge it with the data on this device? Records from both are kept; where both have the same one, the newer edit wins.`)) { say("Sync cancelled. Nothing changed."); return; }
     }
   }
   const now = new Date();
-  const text = JSON.stringify(buildBackup(await db.dumpAll(), now), null, 2);
-  const next = await pushFile(token, text, sha, { message: `genki sync ${now.toISOString()}` });
-  await db.setDevice("syncSha", next);
-  await db.setDevice("lastSyncedAt", now.toISOString());
+  const names = await db.storeNames();
+  const local = await db.dumpAll();
+  let merged = local;
+  const { sha } = await mergeSync(token, (remote) => {
+    merged = local;
+    if (remote) {
+      const parsed = parseBackup(remote.text, names, db.KEY_PATHS);
+      // Never write over a copy this app cannot read (corrupt, or from a newer genki).
+      if (!parsed.ok) throw new Error(`The copy in genki-data cannot be used: ${parsed.error} Nothing was changed.`);
+      merged = mergeStores(local, parsed.backup.stores, db.KEY_PATHS);
+    }
+    return JSON.stringify(buildBackup(merged, now), null, 2);
+  }, { message: `genki sync ${now.toISOString()}` });
+  // genki-data has the merged copy now: record its version before applying it here.
+  await db.setDevice("syncSha", sha);
+  let applied, skipped;
+  try {
+    ({ applied, skipped } = await db.applyChanges(diffStores(local, merged, db.KEY_PATHS)));
+  } catch (e) {
+    // Not marked synced, so the next open syncs again and applies the merge.
+    throw new Error(`Saved to genki-data, but this device could not be updated: ${e.message} Sync again to finish.`);
+  }
+  if (applied) onRestored();
+  // A record edited while syncing was left as it is here; leave the device
+  // unmarked so the next open syncs again and sends that edit out.
+  if (!skipped) await db.setDevice("lastSyncedAt", now.toISOString());
   await db.delDevice("lastSyncError");
-  say("Synced.", "good");
+  const n = `${applied} ${applied === 1 ? "record" : "records"}`;
+  say(`Synced.${applied ? ` ${n} updated from genki-data.` : ""}${skipped ? " Some records changed while syncing; they go out on the next sync." : ""}`, "good");
 }
 
 async function restore() {
