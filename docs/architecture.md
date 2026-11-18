@@ -18,7 +18,7 @@ The product plan and its decisions live in the owner's knowledge hub, not here. 
 
 | Surface | Path | Role |
 |---------|------|------|
-| Page shell | `index.html` | Header (brand, Data & backup button), the `<main id="view">` the app renders into, the rest-timer bar, the three-tab bottom bar, the backup sheet `<dialog>`, PWA meta tags, the Content Security Policy meta (see [sync.md](sync.md#content-security-policy)) |
+| Page shell | `index.html` | Header (brand, Data & backup button), the `<main id="view">` the app renders into, the polite live region `#announcer` that speaks view changes to screen readers (see [frontend.md](frontend.md#screen-reader-announcements)), the rest-timer bar, the three-tab bottom bar, the backup sheet `<dialog>`, PWA meta tags, the Content Security Policy meta (see [sync.md](sync.md#content-security-policy)) |
 | App logic | `app.js`, `ui.js` | Tab routing (URL hash), view rendering, the Data & backup sheet; shared UI helpers and the general sheet. See [frontend.md](frontend.md) |
 | Nutrition | `nutrition.js`, `foods.js`, `nutrition-view.js`, `foods/` | Targets maths and food search (pure, unit-tested), the Nutrition tab and its sheets, the bundled food tables. See [nutrition.md](nutrition.md) |
 | Weight | `weight.js`, `weight-view.js` | Weigh-in maths and CSV parsing (pure, unit-tested), the Today tab's weight card, chart and sheets. See [weight.md](weight.md) |

@@ -23,6 +23,18 @@ Focus survives a re-render: a view replaces its HTML on every change, so `render
 
 If IndexedDB cannot be opened (private browsing in some browsers, storage blocked), every tab shows a "Storage is unavailable" banner and nothing is saved.
 
+## Screen-reader announcements
+
+A view's re-render replaces its HTML, so a change in the view would go unspoken. `index.html` has one polite live region, `#announcer` (visually hidden, outside `#view` so no re-render replaces it), and `announce(text)` in `ui.js` fills it: it empties the region and sets the text 150 ms later, so the re-render and its focus restore settle first and the same message twice in a row is read again. The messages come from pure builders next to each feature's logic, unit-tested in `tests/announce.test.mjs`:
+
+| When | What is read (builder) |
+|------|------------------------|
+| Food added (search, quick add, repeat the day before), an entry saved or removed | What happened, then the day's calories and protein against the targets (`dayTotalsMessage` in `nutrition.js`) |
+| Weigh-in saved or deleted | What happened, then the 7-day average (`weighInMessage` in `weight.js`) |
+| A set ticked done or undone; a session finished | The exercise, set number, weight × reps and rest; or the session's sets and new PRs (`setMessage`, `sessionSavedMessage` in `workouts.js`) |
+
+Status lines inside sheets (`role="status"`) already speak their own messages (import results, form problems), so they are not repeated here.
+
 ## General sheet
 
 `ui.js` drives a second `<dialog>` (`#panel-dialog`, same bottom-sheet look) that views fill with their own content: `openPanel(html, handlers)` shows it, `swapPanel()` replaces its content for the next step of a flow (with a back button), `closePanel()` hides it. Handlers get every tap on a `[data-act]` element, every form submit (default prevented) and every input change inside it; `data-act="close"` always closes. Closing returns focus to the control that opened the sheet. Forms use `novalidate` and show the first problem in a status line.

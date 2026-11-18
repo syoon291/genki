@@ -10,6 +10,20 @@ const nf1 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 export const int = (n) => nf0.format(Math.round(n));
 export const dec1 = (n) => nf1.format(Math.round(n * 10) / 10);
 
+// Tell screen readers what just changed in the view, through the one polite
+// live region in index.html (#announcer). It sits outside #view, so a
+// re-render never replaces it. Emptying it first and filling it a moment
+// later makes the same message twice in a row be read again, and lets the
+// re-render and its focus restore settle before the message is spoken.
+let announceTimer = null;
+export function announce(text) {
+  const el = document.getElementById("announcer");
+  if (!el) return;
+  clearTimeout(announceTimer);
+  el.textContent = "";
+  announceTimer = setTimeout(() => { el.textContent = text; }, 150);
+}
+
 export function newId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }

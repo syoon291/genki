@@ -27,6 +27,8 @@
   </header>
 
   <main id="view" tabindex="-1"></main>
+  <!-- Screen readers hear what changed in the view (totals after logging food, a weigh-in saved, a set logged). -->
+  <div id="announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <div class="rest-timer" id="rest-timer" role="timer" aria-label="Rest timer" hidden>
     <div class="rest-bar"><i id="rest-fill"></i></div>

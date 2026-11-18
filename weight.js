@@ -130,3 +130,9 @@ export function parseWeighInCsv(text) {
   });
   return { rows: sortWeighIns(rows), skipped };
 }
+
+// What a screen reader hears after a weigh-in is saved or deleted: what
+// happened, then the 7-day average now (null when no weigh-ins are left).
+export function weighInMessage(action, avg) {
+  return avg == null ? `${action} No weigh-ins left.` : `${action} 7-day average ${round1(avg)} kg.`;
+}

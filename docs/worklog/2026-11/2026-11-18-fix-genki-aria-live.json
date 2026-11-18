@@ -1,0 +1,1 @@
+{"date": "2026-11-18", "project": "genki", "summary": "Screen readers now hear main-view updates (day totals after logging food, weigh-in saved or deleted with the 7-day average, set done or undone, session saved) through one polite aria-live region outside the re-rendered view.", "pr": 7, "why": "Closes the low-severity item left by the phase 6 a11y audit."}

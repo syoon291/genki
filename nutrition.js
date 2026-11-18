@@ -279,3 +279,13 @@ export function parseWeeklyCsv(text) {
   const rows = [...byWeek.values()].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   return { rows, skipped };
 }
+
+// What a screen reader hears after the day's log changes: what happened, then
+// the day's calories and protein against the targets (or eaten, without a profile).
+export function dayTotalsMessage(action, total, t) {
+  const r = Math.round;
+  const totals = t
+    ? `Day total ${r(total.kcal)} of ${r(t.kcal)} kcal, ${r(total.protein)} of ${r(t.protein)} g protein.`
+    : `Day total ${r(total.kcal)} kcal, ${r(total.protein)} g protein.`;
+  return `${action} ${totals}`;
+}

@@ -20,6 +20,7 @@ A weigh-in is one weight in kg for one local day (store `weighIns`, keyed by the
 
 - **Log weight** (card and history): a day (today by default) and a weight. Opened on a day that has one, it edits it and offers Delete, which asks to confirm (naming the day and weight) first; moving it to another day replaces that day's.
 - **History**: every weigh-in, newest first, with the 7-day average on that day. Tap one to edit or delete it.
+- Saving or deleting a weigh-in tells screen readers the new 7-day average ([frontend.md](frontend.md#screen-reader-announcements)).
 
 ## The numbers
 

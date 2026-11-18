@@ -29,7 +29,7 @@ The plan's days, with the next one in the rotation marked. Starting a day create
 - **Last** shows the last session's sets of that exercise; **Try** gives the progression suggestion. Set rows are pre-filled with the suggested weight; the reps and RIR placeholders show the targets.
 - Progression is double progression: stay at a weight until every set reaches the top of the rep range, then add the exercise's smallest jump (0.5-5 kg); most sets below the range drops about 10%; bodyweight work adds a rep.
 - A swap menu offers the other exercises of the same pattern that the plan's equipment allows (the suggestion follows the new exercise).
-- The check button marks a set done; on an empty row it logs the placeholders. Marking a set done starts the rest timer: a bar above the tabs with +30 s and Skip, vibrating at zero where the phone allows.
+- The check button marks a set done; on an empty row it logs the placeholders. Marking a set done starts the rest timer: a bar above the tabs with +30 s and Skip, vibrating at zero where the phone allows. Screen readers hear the set logged (weight × reps and the rest), and on finish the session's sets and new PRs ([frontend.md](frontend.md#screen-reader-announcements)).
 - Every keystroke is saved, so a reload or a closed app keeps the session.
 - **Finish and save** keeps rows with reps above 0 (blank RIR takes the target), stores the session, moves the rotation on, and shows a summary with sets, load moved, minutes and new PRs. **Discard** drops it.
 
