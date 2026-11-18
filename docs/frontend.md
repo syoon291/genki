@@ -8,7 +8,7 @@ status: current
 
 # Frontend
 
-`app.js` is the shell: it routes tabs and renders each into the one `<main id="view">` element of `index.html`, re-reading current state from IndexedDB each time (rendering is async; a newer render wins over a slower one). Feature views live in their own modules (`nutrition-view.js`, see [nutrition.md](nutrition.md); `weight-view.js`, see [weight.md](weight.md); `workouts-view.js`, see [workouts.md](workouts.md)); `app.js` forwards taps on any `[data-act]` element in the view to them (acts starting `lift-` go to the workouts view, `w-` to the weight view, `p-` to the progress view, `t-` to the day trackers view, the rest to nutrition), and every input and change event in the view to the workouts view (set rows and its selects). `ui.js` holds shared helpers: `esc()`, number formats, ids, and the general bottom sheet. `contrast.js` holds the High contrast setting shown in the Data & backup sheet: it sets `data-contrast="more"` on `<html>` on start and whenever the choice or the system's `prefers-contrast` changes (tokens: [design-system.md](design-system.md)).
+`app.js` is the shell: it routes tabs and renders each into the one `<main id="view">` element of `index.html`, re-reading current state from IndexedDB each time (rendering is async; a newer render wins over a slower one). Feature views live in their own modules (`nutrition-view.js`, see [nutrition.md](nutrition.md); `weight-view.js`, see [weight.md](weight.md); `workouts-view.js`, see [workouts.md](workouts.md)); `app.js` forwards taps on any `[data-act]` element in the view to them (acts starting `lift-` go to the workouts view, `w-` to the weight view, `p-` to the progress view, `t-` to the day trackers view, `c-` to the coach cards, the rest to nutrition), and every input and change event in the view to the workouts view (set rows and its selects). `ui.js` holds shared helpers: `esc()`, number formats, ids, and the general bottom sheet. `contrast.js` holds the High contrast setting shown in the Data & backup sheet: it sets `data-contrast="more"` on `<html>` on start and whenever the choice or the system's `prefers-contrast` changes (tokens: [design-system.md](design-system.md)).
 
 ## Tabs
 
@@ -18,7 +18,7 @@ Focus survives a re-render: a view replaces its HTML on every change, so `render
 
 | Tab | What it shows now |
 |-----|-------------------|
-| Today | Greeting by time of day, the date, Calories and Protein tiles plus smaller Carbs and Fat tiles (left of today's targets, see [nutrition.md](nutrition.md#today-tab)), a "Log food" button, the Fasting card and the Water and Exercise cards (see [trackers.md](trackers.md)), the weight card (7-day average, progress to goal, chart; see [weight.md](weight.md)), and a "Next workout" card (the next plan day with a Start button, or the session in progress with Continue; see [workouts.md](workouts.md)) |
+| Today | Greeting by time of day, the date, Calories and Protein tiles plus smaller Carbs and Fat tiles (left of today's targets, see [nutrition.md](nutrition.md#today-tab)), a "Log food" button, the two Coach cards (see [coach.md](coach.md)), the Fasting card and the Water and Exercise cards (see [trackers.md](trackers.md)), the weight card (7-day average, progress to goal, chart; see [weight.md](weight.md)), and a "Next workout" card (the next plan day with a Start button, or the session in progress with Continue; see [workouts.md](workouts.md)) |
 | Nutrition | The day's food log against the targets, with the profile, add-food, my-foods and weekly history sheets. See [nutrition.md](nutrition.md) |
 | Workouts | Train / Progress / Plan, ported from Liftlog: the plan builder, logging a session, records and charts. See [workouts.md](workouts.md) |
 | Progress | One week at a time: Overview, Calories, Macros, Nutrients and Weight views, foods highest in a macro, and Export week (CSV). See [progress.md](progress.md) |
@@ -31,7 +31,7 @@ A view's re-render replaces its HTML, so a change in the view would go unspoken.
 
 | When | What is read (builder) |
 |------|------------------------|
-| Food added (search, recently logged, quick add, a my meal, repeat the day before; "on 3 days" when several), an entry saved or removed | What happened, then the day's calories and protein against the targets (`dayTotalsMessage` in `nutrition.js`) |
+| Food added (search, recently logged, quick add, a my meal, a coach meal idea, repeat the day before; "on 3 days" when several), an entry saved or removed | What happened, then the day's calories and protein against the targets (`dayTotalsMessage` in `nutrition.js`) |
 | Weigh-in saved or deleted | What happened, then the 7-day average (`weighInMessage` in `weight.js`) |
 | Water added or removed; a fast started, ended, changed or deleted; exercise saved or cleared | The glasses against the goal; the fast's length against its goal; the day's exercise and net calories (`waterMessage`, `fastMessage`, `exerciseMessage` in `trackers.js`) |
 | Moved to another week on the Progress tab | The week and its average calories (`weekMessage` in `progress.js`) |

@@ -8,7 +8,7 @@ import { contrastFailures } from "./contrast.mjs";
 const fail = (msg) => { console.error(`check failed: ${msg}`); process.exit(1); };
 
 // App files load as ES modules; sw.js is a classic service worker script.
-const MODULES = ["app.js", "db.js", "backup.js", "sync.js", "sync-view.js", "merge.js", "ui.js", "contrast.js", "nutrition.js", "foods.js", "nutrition-view.js", "weight.js", "weight-view.js", "mfp.js", "workouts.js", "workouts-view.js", "progress.js", "progress-view.js", "trackers.js", "trackers-view.js"];
+const MODULES = ["app.js", "db.js", "backup.js", "sync.js", "sync-view.js", "merge.js", "ui.js", "contrast.js", "nutrition.js", "foods.js", "nutrition-view.js", "weight.js", "weight-view.js", "mfp.js", "workouts.js", "workouts-view.js", "progress.js", "progress-view.js", "trackers.js", "trackers-view.js", "coach.js", "coach-view.js"];
 for (const [f, args] of [...MODULES.map((m) => [m, ["--input-type=module"]]), ["sw.js", []]]) {
   try { execFileSync(process.execPath, ["--check", ...args], { input: readFileSync(f), stdio: ["pipe", "pipe", "pipe"] }); }
   catch (e) { fail(`${f} does not parse\n${e.stderr}`); }
