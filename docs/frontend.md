@@ -7,11 +7,11 @@ status: current
 
 # Frontend
 
-`app.js` is the shell: it routes tabs and renders each into the one `<main id="view">` element of `index.html`, re-reading current state from IndexedDB each time (rendering is async; a newer render wins over a slower one). Feature views live in their own modules (`nutrition-view.js`, see [nutrition.md](nutrition.md); `weight-view.js`, see [weight.md](weight.md); `workouts-view.js`, see [workouts.md](workouts.md)); `app.js` forwards taps on any `[data-act]` element in the view to them (acts starting `lift-` go to the workouts view, `w-` to the weight view, the rest to nutrition), and every input and change event in the view to the workouts view (set rows and its selects). `ui.js` holds shared helpers: `esc()`, number formats, ids, and the general bottom sheet.
+`app.js` is the shell: it routes tabs and renders each into the one `<main id="view">` element of `index.html`, re-reading current state from IndexedDB each time (rendering is async; a newer render wins over a slower one). Feature views live in their own modules (`nutrition-view.js`, see [nutrition.md](nutrition.md); `weight-view.js`, see [weight.md](weight.md); `workouts-view.js`, see [workouts.md](workouts.md)); `app.js` forwards taps on any `[data-act]` element in the view to them (acts starting `lift-` go to the workouts view, `w-` to the weight view, `p-` to the progress view, the rest to nutrition), and every input and change event in the view to the workouts view (set rows and its selects). `ui.js` holds shared helpers: `esc()`, number formats, ids, and the general bottom sheet.
 
 ## Tabs
 
-The bottom bar has three tabs. The current tab lives in the URL hash (`#today`, `#nutrition`, `#workouts`; anything else shows Today), so a reload or a link lands on the same tab. Changing tabs moves focus to the view, marks the tab button with `aria-current="page"` and sets the page title (for example "Nutrition · genki").
+The bottom bar has four tabs. The current tab lives in the URL hash (`#today`, `#nutrition`, `#workouts`, `#progress`; anything else shows Today), so a reload or a link lands on the same tab. Changing tabs moves focus to the view, marks the tab button with `aria-current="page"` and sets the page title (for example "Nutrition · genki").
 
 Focus survives a re-render: a view replaces its HTML on every change, so `render()` re-focuses the control that had focus (found by its `data-*` attributes, `focusKey()` in `ui.js`), and when a sheet closes after its opener was re-rendered away, focus goes to the same control in the new view (or the view itself). `html` has scroll padding for the sticky header and the tab bar, so a focused control is never hidden under them.
 
@@ -20,6 +20,7 @@ Focus survives a re-render: a view replaces its HTML on every change, so `render
 | Today | Greeting by time of day, the date, Calories and Protein tiles plus smaller Carbs and Fat tiles (left of today's targets, see [nutrition.md](nutrition.md#today-tab)), a "Log food" button, the weight card (7-day average, progress to goal, chart; see [weight.md](weight.md)), and a "Next workout" card (the next plan day with a Start button, or the session in progress with Continue; see [workouts.md](workouts.md)) |
 | Nutrition | The day's food log against the targets, with the profile, add-food, my-foods and weekly history sheets. See [nutrition.md](nutrition.md) |
 | Workouts | Train / Progress / Plan, ported from Liftlog: the plan builder, logging a session, records and charts. See [workouts.md](workouts.md) |
+| Progress | One week at a time: Overview, Calories, Macros, Nutrients and Weight views, foods highest in a macro, and Export week (CSV). See [progress.md](progress.md) |
 
 If IndexedDB cannot be opened (private browsing in some browsers, storage blocked), every tab shows a "Storage is unavailable" banner and nothing is saved.
 
@@ -31,6 +32,7 @@ A view's re-render replaces its HTML, so a change in the view would go unspoken.
 |------|------------------------|
 | Food added (search, recently logged, quick add, a my meal, repeat the day before; "on 3 days" when several), an entry saved or removed | What happened, then the day's calories and protein against the targets (`dayTotalsMessage` in `nutrition.js`) |
 | Weigh-in saved or deleted | What happened, then the 7-day average (`weighInMessage` in `weight.js`) |
+| Moved to another week on the Progress tab | The week and its average calories (`weekMessage` in `progress.js`) |
 | A set ticked done or undone; a session finished | The exercise, set number, weight × reps and rest; or the session's sets and new PRs (`setMessage`, `sessionSavedMessage` in `workouts.js`) |
 
 Saving a my meal says its name and how many foods it holds. Status lines inside sheets (`role="status"`) already speak their own messages (import results, form problems), so they are not repeated here.
