@@ -208,15 +208,18 @@ async function importMfp(files) {
     return;
   }
   if (!confirm(mfpConfirmText(plan, { ignored, skipped, unit }))) { await renderSheet("Import cancelled. Nothing changed."); return; }
-  if (plan.entries.length) await db.putMany("entries", plan.entries);
-  if (plan.myFoods.length) await db.putMany("myFoods", plan.myFoods);
+  const entriesOut = [...plan.entries, ...plan.fillEntries], foodsOut = [...plan.myFoods, ...plan.fillFoods];
+  if (entriesOut.length) await db.putMany("entries", entriesOut);
+  if (foodsOut.length) await db.putMany("myFoods", foodsOut);
   if (plan.weighIns.length) { await db.putMany("weighIns", plan.weighIns); await syncProfileWeight(); }
   const done = [
     plan.entries.length ? `${plan.entries.length} ${plan.entries.length === 1 ? "meal" : "meals"}` : "",
     plan.myFoods.length ? `${plan.myFoods.length} ${plan.myFoods.length === 1 ? "my food" : "my foods"}` : "",
     plan.weighIns.length ? `${plan.weighIns.length} ${plan.weighIns.length === 1 ? "weigh-in" : "weigh-ins"}` : "",
   ].filter(Boolean);
-  await renderSheet(`Imported ${done.join(", ")} from MyFitnessPal.${plan.myFoods.length ? " Rename the new my foods in Nutrition > My foods." : ""}`, "good");
+  const filled = plan.fillEntries.length + plan.fillFoods.length;
+  const fillNote = filled ? `Filled in fiber, sugar and sodium on ${filled} ${filled === 1 ? "record" : "records"} imported before.` : "";
+  await renderSheet(`${done.length ? `Imported ${done.join(", ")} from MyFitnessPal.` : ""}${done.length && fillNote ? " " : ""}${fillNote}${plan.myFoods.length ? " Rename the new my foods in Nutrition > My foods." : ""}`, "good");
   render();
 }
 

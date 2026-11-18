@@ -4,14 +4,15 @@
 //
 // The export has three files, told apart by their header row:
 // - Nutrition-Summary: one row per day per meal, the meal's TOTALS only (no
-//   food names): Date, Meal, Calories, Fat (g), ..., Carbohydrates (g), Fiber,
-//   Sugar, Protein (g), ...
+//   food names): Date, Meal, Calories, Fat (g), ..., Sodium (mg), ...,
+//   Carbohydrates (g), Fiber, Sugar, Protein (g), ...
 // - Measurement-Summary: Date, Weight (in the account's unit, lb unless the
 //   header says kg), only on days a weight was logged.
 // - Exercise-Summary: exercise calories and steps. genki has nowhere to keep
 //   these, so the file is recognised and left out.
 import { validDate, round1, WEIGHT_RANGE } from "./weight.js";
 import { MEALS } from "./nutrition.js";
+import { EXTRAS, extrasOf } from "./foods.js";
 
 const KG_PER_LB = 0.45359237;
 const MEAL_IDS = new Set(MEALS.map((m) => m.id));
@@ -84,9 +85,16 @@ export function mealFor(name) {
   return MEAL_ALIASES[k] ?? "snacks";
 }
 
+// Fiber and sugar in g, sodium in mg (the units of foods.js EXTRAS), with the
+// largest number a meal may hold.
+const EXTRA_COLS = { fiber: [/^fiber\b/, 2000], sugar: [/^sugars?\b/, 2000], sodium: [/^sodium\b/, 100000] };
+const roundExtra = (id, v) => (id === "sodium" ? Math.round(v) : round1(v));
+
 // Nutrition-Summary rows: { rows: [{ date, meal (genki's), mealName (as in the
-// file), kcal, protein, carbs, fat }] oldest first, skipped: [{ line, reason }] }.
-// Two rows for one day and meal are added together.
+// file), kcal, protein, carbs, fat, fiber?, sugar?, sodium? }] oldest first,
+// skipped: [{ line, reason }] }. fiber, sugar and sodium are there only when
+// the file has their column and the cell is filled in. Two rows for one day
+// and meal are added together.
 export function parseMfpNutrition(text) {
   const [head, ...data] = parseCsv(text);
   const skipped = [];
@@ -96,6 +104,7 @@ export function parseMfpNutrition(text) {
     date: findCol(h, /^date$/), meal: findCol(h, /^meal$/), kcal: findCol(h, /^calories/),
     fat: findCol(h, /^fat\b/), carbs: findCol(h, /^carbohydrates?\b/), protein: findCol(h, /^protein\b/),
   };
+  const extraCol = Object.fromEntries(Object.entries(EXTRA_COLS).map(([id, [re]]) => [id, findCol(h, re)]));
   if (col.date < 0 || col.meal < 0 || col.kcal < 0) return { rows: [], skipped: [{ line: head.line, reason: "not a MyFitnessPal Nutrition-Summary file" }] };
   const byKey = new Map();
   for (const { line, cells } of data) {
@@ -109,13 +118,26 @@ export function parseMfpNutrition(text) {
     }
     if (Object.values(v).includes(null)) continue;
     if (!(v.kcal > 0 || v.protein > 0 || v.carbs > 0 || v.fat > 0)) { skipped.push({ line, reason: "an empty meal" }); continue; }
+    // A fiber, sugar or sodium cell that is blank or not a number is left out; the meal still counts.
+    const ex = {};
+    for (const [id, [, max]] of Object.entries(EXTRA_COLS)) {
+      const cell = extraCol[id] >= 0 ? cells[extraCol[id]] ?? "" : "";
+      const n = cell === "" ? null : toNumber(cell, max);
+      if (n !== null) ex[id] = n;
+    }
     const key = `${date}|${norm(mealName)}`;
     const prev = byKey.get(key);
-    if (prev) for (const k of ["kcal", "protein", "carbs", "fat"]) prev[k] += v[k];
-    else byKey.set(key, { date, meal: mealFor(mealName), mealName, ...v });
+    if (prev) {
+      for (const k of ["kcal", "protein", "carbs", "fat"]) prev[k] += v[k];
+      for (const [id, n] of Object.entries(ex)) prev[id] = (prev[id] ?? 0) + n;
+    } else byKey.set(key, { date, meal: mealFor(mealName), mealName, ...v, ...ex });
   }
   const rows = [...byKey.values()]
-    .map((r) => ({ ...r, kcal: round1(r.kcal), protein: round1(r.protein), carbs: round1(r.carbs), fat: round1(r.fat) }))
+    .map((r) => {
+      const out = { ...r, kcal: round1(r.kcal), protein: round1(r.protein), carbs: round1(r.carbs), fat: round1(r.fat) };
+      for (const { id } of EXTRAS) if (id in out) out[id] = roundExtra(id, out[id]);
+      return out;
+    })
     .sort((a, b) => a.date.localeCompare(b.date) || MEALS.findIndex((m) => m.id === a.meal) - MEALS.findIndex((m) => m.id === b.meal));
   return { rows, skipped };
 }
@@ -156,24 +178,36 @@ const mealLabel = (id) => MEALS.find((m) => m.id === id)?.label ?? "Meal";
 // - meal totals with the same kcal, protein, carbs and fat on 2+ rows become
 //   one my food each, named after the meal they were most often ("Lunch 1,163
 //   kcal"), unless a my food with those numbers exists;
+// - fiber, sugar and sodium ride along on both; a meal or my food imported
+//   before (same id) that lacks one of them gets it filled in, and nothing
+//   else about it changes (fillEntries, fillFoods: the whole records to put);
 // - weights fill only days with no weigh-in.
 // Days after `today` are left out. `now` is a Date.
 export function planMfpImport({ meals = [], weights = [], entries = [], myFoods = [], weighIns = [], today, now = new Date() }) {
   const at = now.toISOString();
   const future = [];
-  const haveEntry = new Set(entries.map((e) => e.id));
+  const stored = new Map(entries.map((e) => [e.id, e]));
+  const haveEntry = new Set(stored.keys());
   const newEntries = [];
+  const fillEntries = [];
   let alreadyLogged = 0;
   const pastMeals = [];
   for (const r of meals) {
     if (r.date > today) { future.push(r.date); continue; }
     pastMeals.push(r);
     const id = entryId(r);
-    if (haveEntry.has(id)) { alreadyLogged++; continue; }
+    if (haveEntry.has(id)) {
+      const old = stored.get(id);
+      const add = old && missingExtras(old.base, r);
+      stored.delete(id); // one fill per entry, even if the files repeat a meal
+      if (add) fillEntries.push({ ...old, base: { ...old.base, ...add } });
+      else alreadyLogged++;
+      continue;
+    }
     haveEntry.add(id);
     newEntries.push({
       id, date: r.date, meal: r.meal, name: `MyFitnessPal ${norm(r.mealName)}`, source: "mfp", ref: null,
-      amount: 1, unit: "1 meal", base: { kcal: r.kcal, protein: r.protein, fat: r.fat, carbs: r.carbs }, createdAt: at,
+      amount: 1, unit: "1 meal", base: { kcal: r.kcal, protein: r.protein, fat: r.fat, carbs: r.carbs, ...extrasOf(r) }, createdAt: at,
     });
   }
 
@@ -186,14 +220,22 @@ export function planMfpImport({ meals = [], weights = [], entries = [], myFoods 
     groups.set(k, g);
   }
   const haveFood = new Set(myFoods.map(macroKey));
-  const haveId = new Set(myFoods.map((f) => f.id));
+  const byId = new Map(myFoods.map((f) => [f.id, f]));
   const names = new Set(myFoods.map((f) => f.name.toLowerCase()));
   const newFoods = [];
+  const fillFoods = [];
   let foodsKnown = 0;
   for (const [k, g] of groups) {
     if (g.rows.length < 2) continue;
     const id = `mfp-${k.replace(/\|/g, "-").replace(/\./g, "_")}`;
-    if (haveFood.has(k) || haveId.has(id)) { foodsKnown++; continue; }
+    // The newest row with fiber, sugar or sodium gives the my food's.
+    const withExtras = g.rows.filter((x) => Object.keys(extrasOf(x)).length).sort((a, b) => b.date.localeCompare(a.date))[0];
+    const ex = withExtras ? extrasOf(withExtras) : {};
+    // Only a my food this import made before is filled in; one of the owner's own with the same numbers is theirs.
+    const old = byId.get(id);
+    const add = old && missingExtras(old, ex);
+    if (add) { fillFoods.push({ ...old, ...add }); continue; }
+    if (haveFood.has(k) || old) { foodsKnown++; continue; }
     const r = g.rows[0];
     const meal = [...g.byMeal].sort((a, b) => b[1] - a[1] || MEALS.findIndex((m) => m.id === a[0]) - MEALS.findIndex((m) => m.id === b[0]))[0][0];
     const base = `${mealLabel(meal)} ${Math.round(r.kcal).toLocaleString("en-US")} kcal`;
@@ -202,7 +244,7 @@ export function planMfpImport({ meals = [], weights = [], entries = [], myFoods 
     names.add(name.toLowerCase());
     const last = g.rows.map((x) => x.date).sort().at(-1);
     newFoods.push({
-      id, name, serving: "1 meal", grams: null, kcal: r.kcal, protein: r.protein, fat: r.fat, carbs: r.carbs,
+      id, name, serving: "1 meal", grams: null, kcal: r.kcal, protein: r.protein, fat: r.fat, carbs: r.carbs, ...ex,
       uses: g.rows.length, lastUsed: `${last}T12:00:00.000Z`, createdAt: at,
     });
   }
@@ -219,10 +261,17 @@ export function planMfpImport({ meals = [], weights = [], entries = [], myFoods 
 
   const days = [...newEntries.map((e) => e.date), ...newWeighIns.map((w) => w.date)].sort();
   return {
-    entries: newEntries, myFoods: newFoods, weighIns: newWeighIns,
+    entries: newEntries, myFoods: newFoods, weighIns: newWeighIns, fillEntries, fillFoods,
     alreadyLogged, foodsKnown, weightDaysTaken, future: future.length,
     from: days[0] ?? null, to: days.at(-1) ?? null,
   };
+}
+
+// The fiber, sugar and sodium `from` has that `record` lacks, or null when none.
+function missingExtras(record, from) {
+  const have = extrasOf(record);
+  const add = Object.fromEntries(Object.entries(extrasOf(from)).filter(([id]) => !(id in have)));
+  return Object.keys(add).length ? add : null;
 }
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -234,8 +283,15 @@ export function mfpConfirmText(plan, { ignored = [], skipped = 0, unit = "lb" } 
     plan.myFoods.length ? plural(plan.myFoods.length, "repeated meal") + " to my foods" : "",
     plan.weighIns.length ? plural(plan.weighIns.length, "weigh-in") + (unit === "lb" ? " (read as lb)" : "") : "",
   ].filter(Boolean);
+  const fills = [
+    plan.fillEntries?.length ? plural(plan.fillEntries.length, "meal") + " in the food log" : "",
+    plan.fillFoods?.length ? plural(plan.fillFoods.length, "my food") : "",
+  ].filter(Boolean);
+  const fillText = fills.length ? `fill in fiber, sugar and sodium on ${fills.join(" and ")} imported before` : "";
   const lines = [
-    `Add ${adds.join(", ")}${plan.from ? `, from ${plan.from} to ${plan.to}` : ""}?`,
+    adds.length
+      ? `Add ${adds.join(", ")}${plan.from ? `, from ${plan.from} to ${plan.to}` : ""}${fillText ? `, and ${fillText}` : ""}?`
+      : `${fillText[0].toUpperCase()}${fillText.slice(1)}?`,
     plan.alreadyLogged ? `${plural(plan.alreadyLogged, "meal was", "meals were")} imported before and ${plan.alreadyLogged === 1 ? "is" : "are"} left as ${plan.alreadyLogged === 1 ? "it is" : "they are"}.` : "",
     plan.foodsKnown ? `${plural(plan.foodsKnown, "repeated meal is", "repeated meals are")} already in my foods.` : "",
     plan.weightDaysTaken ? `${plural(plan.weightDaysTaken, "day already has", "days already have")} a weigh-in, which ${plan.weightDaysTaken === 1 ? "is" : "are"} kept.` : "",
@@ -247,4 +303,4 @@ export function mfpConfirmText(plan, { ignored = [], skipped = 0, unit = "lb" } 
 }
 
 // Whether the plan adds anything at all.
-export const planIsEmpty = (plan) => !plan.entries.length && !plan.myFoods.length && !plan.weighIns.length;
+export const planIsEmpty = (plan) => !plan.entries.length && !plan.myFoods.length && !plan.weighIns.length && !plan.fillEntries?.length && !plan.fillFoods?.length;
