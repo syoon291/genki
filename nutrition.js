@@ -206,3 +206,76 @@ export function mealForHour(h) {
   if (h >= 17 && h < 22) return "dinner";
   return "snacks";
 }
+
+// ---------- weekly history (imported, read-only) ----------
+// Weekly nutrition averages from another app, kept as history: one record per
+// week, keyed by its first day. Never edited in genki; a re-import replaces a week.
+
+export const WEEK_COLUMNS = ["week_start", "week_end", "net_kcal_per_day", "protein_g", "carbs_g", "fat_g", "fiber_g", "carb_pct", "fat_pct", "protein_pct"];
+// Record field for each column after the two dates, with its allowed range.
+const WEEK_FIELDS = [
+  ["kcal", "net_kcal_per_day", 0, 10000],
+  ["protein", "protein_g", 0, 1000],
+  ["carbs", "carbs_g", 0, 2000],
+  ["fat", "fat_g", 0, 1000],
+  ["fiber", "fiber_g", 0, 500],
+  ["carbPct", "carb_pct", 0, 100],
+  ["fatPct", "fat_pct", 0, 100],
+  ["proteinPct", "protein_pct", 0, 100],
+];
+
+const isDay = (s) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+};
+
+// Parse a weekly-averages CSV. The columns are found by a header row naming
+// them (any order, extra columns ignored); with no header they are taken in
+// WEEK_COLUMNS order. week_start, week_end and net_kcal_per_day are required;
+// the rest may be blank (stored as null). Percents may carry a "%". Returns
+// { rows: [{ weekStart, weekEnd, kcal, protein, carbs, fat, fiber, carbPct,
+// fatPct, proteinPct }] (oldest first, last row for a week wins),
+// skipped: [{ line, reason }] }.
+export function parseWeeklyCsv(text) {
+  const byWeek = new Map(), skipped = [];
+  const lines = String(text).replace(/^﻿/, "").split(/\r\n|\n|\r/);
+  let col = null;
+  lines.forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) return;
+    const delim = line.match(/[,;\t]/)?.[0] ?? ",";
+    const cells = line.split(delim).map((c) => c.trim().replace(/^"(.*)"$/, "$1").trim());
+    if (!col) {
+      if (!/^\d/.test(cells[0])) {
+        const names = cells.map((c) => c.toLowerCase());
+        col = Object.fromEntries(WEEK_COLUMNS.map((c) => [c, names.indexOf(c)]));
+        return;
+      }
+      col = Object.fromEntries(WEEK_COLUMNS.map((c, k) => [c, k]));
+    }
+    const n = i + 1;
+    if (col.week_start < 0 || col.week_end < 0 || col.net_kcal_per_day < 0) { skipped.push({ line: n, reason: "the header has no week_start, week_end or net_kcal_per_day column" }); return; }
+    const cell = (name) => (col[name] >= 0 ? (cells[col[name]] ?? "") : "");
+    const weekStart = cell("week_start").replace(/\//g, "-");
+    const weekEnd = cell("week_end").replace(/\//g, "-");
+    if (!isDay(weekStart)) { skipped.push({ line: n, reason: `"${cell("week_start")}" is not a YYYY-MM-DD date` }); return; }
+    if (!isDay(weekEnd) || weekEnd < weekStart) { skipped.push({ line: n, reason: `"${cell("week_end")}" is not a YYYY-MM-DD date on or after ${weekStart}` }); return; }
+    const row = { weekStart, weekEnd };
+    for (const [field, name, lo, hi] of WEEK_FIELDS) {
+      const s = cell(name).replace(/%$/, "").trim();
+      if (s === "") {
+        if (field === "kcal") { skipped.push({ line: n, reason: "no net_kcal_per_day" }); return; }
+        row[field] = null;
+        continue;
+      }
+      const v = Number(delim === "," ? s : s.replace(",", "."));
+      if (!Number.isFinite(v) || v < lo || v > hi) { skipped.push({ line: n, reason: `${name} "${cell(name)}" is not a number from ${lo} to ${hi}` }); return; }
+      row[field] = Math.round(v * 10) / 10;
+    }
+    byWeek.set(weekStart, row);
+  });
+  const rows = [...byWeek.values()].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+  return { rows, skipped };
+}

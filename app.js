@@ -6,7 +6,7 @@
 // The tab is kept in the URL hash so a reload stays where you were.
 import * as db from "./db.js";
 import { buildBackup, backupFileName, parseBackup, countRecords } from "./backup.js";
-import { esc, initPanel } from "./ui.js";
+import { esc, initPanel, focusKey, restoreFocus } from "./ui.js";
 import { syncSection, handleSyncAct, handleSyncSubmit, setSyncHooks, clearSyncNote, autoSync } from "./sync-view.js";
 import { nutritionView, todayTiles, handleViewClick, setRerender } from "./nutrition-view.js";
 import { weightCard, handleWeightClick, setWeightRerender } from "./weight-view.js";
@@ -53,6 +53,7 @@ let renderSeq = 0;
 async function render() {
   const seq = ++renderSeq;
   const tab = currentTab();
+  document.title = `${tab[0].toUpperCase()}${tab.slice(1)} · genki`;
   for (const b of document.querySelectorAll(".tabs button")) {
     const on = b.dataset.tab === tab;
     b.classList.toggle("on", on);
@@ -63,7 +64,13 @@ async function render() {
   try { html = await RENDER[tab](); }
   catch (e) { html = `<div class="card warn-card" role="alert"><strong>Something went wrong.</strong> <span class="small">${esc(e.message)}</span></div>`; }
   if (seq !== renderSeq) return;
+  // Keep focus on the same control across the re-render (a day arrow, a toggle).
+  const active = view.contains(document.activeElement) ? focusKey(document.activeElement) : null;
   view.innerHTML = banner + html;
+  const again = active && view.querySelector(active);
+  if (again && !again.disabled) again.focus({ preventScroll: true });
+  else if (active) view.focus({ preventScroll: true });
+  restoreFocus(view);
 }
 
 setRerender(() => render());
