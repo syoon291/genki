@@ -15,8 +15,8 @@ The Nutrition tab logs what was eaten each day against four daily targets: calor
 | File | Role |
 |------|------|
 | `nutrition.js` | Targets maths (calories, protein, carbs and fat), day keys and day totals. Pure functions, unit-tested (`tests/nutrition.test.mjs`) |
-| `foods.js` | Food shapes, search ranking, serving units, building a log entry. Pure, unit-tested (`tests/foods.test.mjs`) |
-| `nutrition-view.js` | The Nutrition tab, the Today tab's tiles, and every nutrition sheet (profile, add food, quick add, my foods, edit entry) |
+| `foods.js` | Food shapes, search ranking, serving units and sizes, building a log entry, recently logged, frequently paired foods, my meals and recipe maths, the optional nutrients, the Import My foods file. Pure, unit-tested (`tests/foods.test.mjs`, `tests/logging.test.mjs`, `tests/myfoods-import.test.mjs`) |
+| `nutrition-view.js` | The Nutrition tab, the Today tab's tiles, and every nutrition sheet (profile, add food, quick add, my foods and recipes, my meals, edit entry) |
 | `mfp.js` | The MyFitnessPal import: reads the export's CSVs and plans what it adds. Pure, unit-tested (`tests/mfp.test.mjs`); the Data & backup sheet runs it (see [MyFitnessPal import](#myfitnesspal-import)) |
 | `foods/jp.json`, `foods/us.json` | The bundled food tables (see [Food tables](#food-tables)) |
 
@@ -39,17 +39,49 @@ Once there are weigh-ins, the profile's weight follows their latest 7-day averag
 
 Each log entry is one food eaten on one local day (`YYYY-MM-DD`) in one meal (breakfast, lunch, dinner, snacks). An entry stores its nutrients **per unit** (`base`) and the `amount` of units eaten, so editing the amount re-scales it, and later edits to a saved food never rewrite past days. Record shapes are in [data-flow.md](data-flow.md#store).
 
-The tab shows one day at a time (arrows step back and forward, never past today; the day label returns to today). For each meal: its entries (tap one to change the amount or meal, or remove it) and an add button. When the day is empty and the day before has entries, a "Repeat" button copies them in. Adding, changing or removing food tells screen readers the day's calories and protein against the targets ([frontend.md](frontend.md#screen-reader-announcements)).
+The tab shows one day at a time (arrows step back and forward, never past today; the day label returns to today). For each meal: its entries (tap one to change the amount or meal, or remove it), an add button and, once it has entries, **Save as meal** (see [My meals](#my-meals)). When the day is empty and the day before has entries, a "Repeat" button copies them in. Adding, changing or removing food tells screen readers the day's calories and protein against the targets ([frontend.md](frontend.md#screen-reader-announcements)).
 
 ## Adding food
 
-The add sheet picks the meal (suggested by time of day) and searches, in order: my foods, then the Japan table, then USDA. Every word typed must start a word of the food's name, in any order; my foods rank first, then names that start with the first word, then names where the typed words come early, then shorter (more generic) names. Empty search shows recently used my foods. The tables are fetched the first time the sheet opens and kept in memory; if they fail to load, only my foods are searched and the sheet says why.
+The add sheet picks the meal (suggested by time of day) and searches, in order: my foods, then the Japan table, then USDA. Every word typed must start a word of the food's name, in any order; my foods rank first, then names that start with the first word, then names where the typed words come early, then shorter (more generic) names. With a search typed, my meals whose names match show above the foods. The tables are fetched the first time the sheet opens and kept in memory; if they fail to load, only my foods are searched and the sheet says why.
 
-Picking a food asks for an amount and a unit: grams for table foods (plus USDA's household portions such as "1 large (50 g)"), the serving (and grams, when its weight is known) for my foods. A table food can be saved to my foods at the chosen amount.
+Before anything is typed, the sheet shows **My meals** (most recently used first) and **Recently logged**: the newest entry of each distinct food in the log, from any source (table foods, my foods, quick adds, imported MyFitnessPal meals), up to 12, with the amount logged last time. Picking one opens the amount step at that amount. A my food that still exists comes back as that my food with its current numbers; anything else is logged again exactly as it was (same numbers per unit, same source and reference). `recentLogged` in `foods.js`.
 
-**Quick add** takes a name, kcal and protein (carbs and fat optional) straight from a label, logged as one serving, and can save it to my foods.
+**Amount step.** A **serving size** and a **number of servings**, as on a label: table foods offer 100 g, 1 g and their household portions (opening on 100 g); my foods their own serving, then 100 g and 1 g when the serving weight is known; a recent gram amount adds itself as a size ("150 g"). The entry still stores one unit and an amount (1.5 servings of 100 g is `150 g`), so the log looks as before. Then the meal, the days, **Often eaten with** (below), a preview and, for table foods, "Also save this amount to my foods".
 
-**My foods** are the owner's own items with per-serving numbers (name, serving label, optional serving weight, kcal, protein, carbs, fat). The My foods sheet lists, creates, edits and deletes them; each use bumps a counter and a last-used time for the recent list.
+**Often eaten with** (frequently paired foods): the amount step lists up to 5 foods logged in the same meal of the same day as this one at least twice, most often first, each with the amount from the latest meal they shared and how many times. Ticking one adds it too, to the same meal and days, and the preview counts it. `pairedFoods` in `foods.js` (foods are told apart as in Recently logged).
+
+**Several days.** The amount step, quick add and a my meal show this week's days (Monday first) as toggles, the shown day pressed. Days after today cannot be picked (the day navigation never goes past today either). Adding with several days pressed adds one entry per day, and the button says how many ("Add to 3 days").
+
+**Share of today's targets.** Every preview (amount step, quick add, my meal, edit entry) shows the calories, protein, carbs and fat, any fiber, sugar and sodium, and, with a profile, what share of each daily target that is ("23 % of today's calories"; "each day" when several days are pressed). `pctOfTargets` in `nutrition.js`.
+
+**Quick add** takes a name, kcal and protein (carbs, fat, fiber, sugar and sodium optional) straight from a label, logged as one serving, and can save it to my foods.
+
+**My foods** are the owner's own items with per-serving numbers (name, optional brand or place, serving label, optional serving weight, kcal, protein, carbs, fat, and optional fiber, sugar and sodium). The My foods sheet lists, creates, edits and deletes them; each use bumps a counter and a last-used time. The brand shows under the name and is searched with it ("qdoba bowl").
+
+### Import My foods
+
+**Import My foods...** in the My foods sheet reads a JSON file on the device (nothing is sent anywhere):
+
+```json
+{ "genkiMyFoods": 1,
+  "foods": [{ "name": "Burrito bowl", "brand": "Sample Grill", "serving": "1 bowl", "grams": 450, "kcal": 820, "protein": 45, "carbs": 90, "fat": 28 }],
+  "meals": [{ "name": "Grill lunch", "meal": "lunch", "items": [{ "food": "Burrito bowl", "servings": 1 }] }] }
+```
+
+Foods become my foods with numbers per serving (`brand`, `serving` (default "1 serving"), `grams`, `carbs`, `fat`, `fiber`, `sugar` and `sodium` are optional; `name`, `kcal` and `protein` are required). A food with the same name and brand as a my food (case and accents ignored) updates it, keeping its use count and any optional number the file leaves out (fiber added in genki survives), so importing the file again never adds it twice; a recipe is never overwritten. Meals become my meals; each item names a food in the file (with or without its brand) or an existing my food, and is that food's serving times `servings` (default 1). A meal with the same name as a my meal updates it. `meal` is kept on the record and not used yet. Foods with a missing or bad number, and meal items naming no known food, are left out and listed. A confirm prompt gives the counts (new and updated foods and meals, what is left out); cancelling changes nothing. `parseMyFoodsFile` and `planMyFoodsImport` in `foods.js` (`tests/myfoods-import.test.mjs`). The owner's own file stays on their device and is never committed here.
+
+### Fiber, sugar and sodium
+
+Optional on my foods, quick add, recipes and the entries made from them (fiber and sugar in g, sodium in mg); a field left empty means not known and is stored as nothing, never as 0. The bundled tables carry none of them, and the MyFitnessPal import does not bring them in yet. The day's summary card adds a line with their totals when any entry of the day has them (a total of the entries that carry them).
+
+### My meals
+
+A my meal is several foods saved as one item, such as a usual lunch. **Save as meal** under a meal of the shown day saves its foods (untick any to leave out) under a name. In the add sheet, a my meal's **+** button adds all its foods to the chosen meal on the shown day in one tap; tapping its name opens a step with its foods, a number of servings (every food times it), the meal, the days and a preview. Each food lands in the log as its own entry, so it can be changed or removed alone. The **My meals** button on the Nutrition tab lists them, renames them, takes foods out of them and deletes them. Stored in `myMeals` (shape in [data-flow.md](data-flow.md#store)); `mealEntries` and `itemsTotal` in `foods.js`.
+
+### Recipes
+
+**New recipe** in My foods: a name, how many servings it makes, what one serving is called, and ingredients, each picked from the same search (recently logged, my foods, both tables) with a serving size and a number of servings. The preview shows the numbers per serving: the ingredients' total divided by the servings. A recipe is saved as a my food with those per-serving numbers and its ingredients kept beside them (`recipe` in the record), so it is searched, listed as recent and logged like any my food, and editing it from My foods reopens the recipe. Changing a recipe never rewrites days already logged. `recipePerServing` in `foods.js`.
 
 ## Weekly history
 
@@ -61,7 +93,7 @@ The CSV has the columns `week_start,week_end,net_kcal_per_day,protein_g,carbs_g,
 
 The Data & backup sheet's **Import MyFitnessPal...** button takes the CSV files of a MyFitnessPal data export (pick one or several at once; each is recognised by its header row, so the file names do not matter). Nothing goes to a server: the files are read in the browser and the result is stored on the device like anything typed in (owner decision: a one-time import file, no token, no repo).
 
-- **Nutrition-Summary** (`Date,Meal,Calories,Fat (g),...,Carbohydrates (g),Fiber,Sugar,Protein (g),...`): one row per day per meal, the meal's totals only (MyFitnessPal's export has no food names). Each row becomes one food-log entry on that day and meal, named "MyFitnessPal lunch", logged as `1 meal` with its kcal, protein, carbs and fat (the entry shape holds no other nutrients, so fiber, sugar, sodium and the rest are left out). Custom meal names go to snacks. Two rows for one day and meal are added together.
+- **Nutrition-Summary** (`Date,Meal,Calories,Fat (g),...,Carbohydrates (g),Fiber,Sugar,Protein (g),...`): one row per day per meal, the meal's totals only (MyFitnessPal's export has no food names). Each row becomes one food-log entry on that day and meal, named "MyFitnessPal lunch", logged as `1 meal` with its kcal, protein, carbs and fat (fiber, sugar, sodium and the rest are left out for now; entries can hold fiber, sugar and sodium since, see [Fiber, sugar and sodium](#fiber-sugar-and-sodium)). Custom meal names go to snacks. Two rows for one day and meal are added together.
 - **My foods from repeats**: meal totals with the same kcal (to the calorie), protein, carbs and fat (to 0.1 g) on two or more rows become one my food each, named after the meal they were most often with the calories ("Lunch 1,163 kcal"; a taken name gets " (2)"), serving `1 meal`, its use count and last-used day taken from the rows, so they show first in the add sheet's recent list. Rename them in My foods. A my food already holding those four numbers (also one renamed since) is never added again (owner decision: repeats of 2+ become my foods).
 - **Measurement-Summary** (`Date,Weight`, only on days a weight was logged): read as lb unless the header says kg, converted to kg at 0.1 kg. Weights only fill days with no weigh-in; a day that has one keeps it. The profile weight then follows the 7-day average as after any weigh-in change ([weight.md](weight.md#profile-weight)).
 - **Exercise-Summary** (exercise calories and steps) is recognised and left out: genki has nowhere to keep exercise calories or steps (workouts are lifting sessions). Any other file is left out and named in the prompt.

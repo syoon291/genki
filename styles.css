@@ -304,6 +304,29 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .add-top { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
 .search { margin-bottom: 12px; -webkit-appearance: none; appearance: none; }
 .results h3 { margin-top: 8px; }
+/* faster logging: my meals, recipes, days, extra nutrients */
+.meal-actions { display: flex; align-items: center; gap: 10px; }
+.meal-actions .add-btn { flex: 1; }
+.meal-actions .link-btn { margin-top: 6px; white-space: nowrap; }
+.meal-item { display: flex; align-items: center; }
+.meal-item > .result, .meal-item > .entry { flex: 1; min-width: 0; }
+.meal-item > .icon-btn { margin-right: 8px; flex: none; }
+.add-one { color: var(--accent); }
+.entries label.check { cursor: pointer; justify-content: flex-start; }
+.entries label.check input { flex: none; }
+fieldset.plain { border: 0; margin: 0; padding: 0; min-width: 0; }
+fieldset.plain legend { padding: 0; margin-bottom: 6px; }
+.form.spaced { margin-top: 14px; }
+.days { border: 0; margin: 0; padding: 0; min-width: 0; }
+.days legend { padding: 0; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.days-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.day-tog { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 52px; padding: 4px 0; border: 0; border-radius: 10px; background: var(--surface-2); color: var(--ink); font-size: 12px; font-variant-numeric: tabular-nums; }
+.day-tog strong { font-size: 15px; }
+.day-tog[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.day-tog:disabled { opacity: .4; cursor: default; }
+.pct-line { font-variant-numeric: tabular-nums; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+.more summary { min-height: 44px; display: flex; align-items: center; color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; }
 .results .entries { margin-bottom: 8px; }
 
 /* ---------- workouts ---------- */

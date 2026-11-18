@@ -188,6 +188,21 @@ export function sumEntries(entries) {
   return t;
 }
 
+// The days of the week (Monday first) that hold `key`, as YYYY-MM-DD.
+export function weekDays(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  const back = (new Date(y, m - 1, d).getDay() + 6) % 7; // days since Monday
+  return Array.from({ length: 7 }, (_, i) => shiftDay(key, i - back));
+}
+
+// What share of each daily target (whole percents) the nutrients `n` are.
+// t: targets(); null without a complete profile.
+export function pctOfTargets(n, t) {
+  if (!t) return null;
+  const p = (v, target) => (target > 0 ? Math.round((v / target) * 100) : null);
+  return { kcal: p(n.kcal, t.kcal), protein: p(n.protein, t.protein), carbs: p(n.carbs, t.macros.carbs), fat: p(n.fat, t.macros.fat) };
+}
+
 // { breakfast: { entries, totals }, ... } in MEALS order; unknown meals land in snacks.
 export function byMeal(entries) {
   const out = Object.fromEntries(MEALS.map((m) => [m.id, { entries: [], totals: null }]));

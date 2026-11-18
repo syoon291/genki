@@ -29,11 +29,11 @@ A view's re-render replaces its HTML, so a change in the view would go unspoken.
 
 | When | What is read (builder) |
 |------|------------------------|
-| Food added (search, quick add, repeat the day before), an entry saved or removed | What happened, then the day's calories and protein against the targets (`dayTotalsMessage` in `nutrition.js`) |
+| Food added (search, recently logged, quick add, a my meal, repeat the day before; "on 3 days" when several), an entry saved or removed | What happened, then the day's calories and protein against the targets (`dayTotalsMessage` in `nutrition.js`) |
 | Weigh-in saved or deleted | What happened, then the 7-day average (`weighInMessage` in `weight.js`) |
 | A set ticked done or undone; a session finished | The exercise, set number, weight × reps and rest; or the session's sets and new PRs (`setMessage`, `sessionSavedMessage` in `workouts.js`) |
 
-Status lines inside sheets (`role="status"`) already speak their own messages (import results, form problems), so they are not repeated here.
+Saving a my meal says its name and how many foods it holds. Status lines inside sheets (`role="status"`) already speak their own messages (import results, form problems), so they are not repeated here.
 
 ## General sheet
 

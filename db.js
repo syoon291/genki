@@ -4,10 +4,10 @@
 import { TOMBSTONES, tombstoneId, withTombstones } from "./merge.js";
 
 export const DB_NAME = "genki";
-export const DB_VERSION = 6;
+export const DB_VERSION = 7;
 
 // The keyPath of each store, so a backup can be checked before it replaces anything.
-export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id", weighIns: "date", workouts: "id", nutritionWeeks: "weekStart", [TOMBSTONES]: "id" };
+export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id", weighIns: "date", workouts: "id", nutritionWeeks: "weekStart", [TOMBSTONES]: "id", myMeals: "id" };
 
 // UPGRADES[n] moves a database from version n to n+1.
 const UPGRADES = [
@@ -38,6 +38,11 @@ const UPGRADES = [
     // Tombstones, so sync carries deletions: { id: "<store>:<key as JSON>", store, key, at (ISO time deleted) }.
     // Existing records need no change: until their next edit, merge.js reads their own time.
     db.createObjectStore(TOMBSTONES, { keyPath: KEY_PATHS[TOMBSTONES] });
+  },
+  (db) => {
+    // My meals: several foods saved as one item and logged together:
+    // { id, name, items: [{ name, source, ref, amount, unit, base }], uses, lastUsed, createdAt }.
+    db.createObjectStore("myMeals", { keyPath: KEY_PATHS.myMeals });
   },
 ];
 
