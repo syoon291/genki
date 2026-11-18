@@ -22,14 +22,53 @@ export function newId() {
 // Returning from a handler never closes the sheet; call closePanel().
 
 let handlers = {};
+let opener = null;
 const dialog = () => $("#panel-dialog");
+
+// ---------- focus that survives a re-render ----------
+// Views re-render by replacing #view's HTML, which drops the focused button
+// (and the button a sheet was opened from). focusKey() names a control by its
+// data attributes so the same control can be found and focused again.
+
+export function focusKey(el) {
+  if (!el?.dataset?.act) return null;
+  return Object.entries(el.dataset).map(([k, v]) => `[data-${k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}="${CSS.escape(v)}"]`).join("");
+}
+
+let pendingFocus = null;
+// Called by the app after each render of `root`: focus the control a closed
+// sheet was opened from, if one is waiting.
+export function restoreFocus(root) {
+  if (!pendingFocus) return;
+  const el = root.querySelector(pendingFocus);
+  pendingFocus = null;
+  if (el) el.focus(); else root.focus({ preventScroll: true });
+}
+
+function returnFocus(op) {
+  if (!op || op.isConnected) return; // the browser already put focus back on it
+  const key = focusKey(op);
+  const root = $("#view");
+  const el = key && root.querySelector(key);
+  if (el) { el.focus(); return; }
+  // Its view has not re-rendered yet: focus it when it does, else the view itself.
+  pendingFocus = key;
+  if (!key) root.focus({ preventScroll: true });
+  else setTimeout(() => {
+    if (pendingFocus !== key) return;
+    pendingFocus = null;
+    // Only if nothing took focus meanwhile (the user may have moved on).
+    const a = document.activeElement;
+    if (!a || a === document.body || a === document.documentElement || !a.isConnected) root.focus({ preventScroll: true });
+  }, 1000);
+}
 const panel = () => $("#panel");
 
 export function openPanel(html, h = {}) {
   handlers = h;
   panel().innerHTML = html;
   const d = dialog();
-  if (!d.open) d.showModal();
+  if (!d.open) { opener = document.activeElement; d.showModal(); }
   // Focus the first field marked autofocus (showModal only does this on open).
   panel().querySelector("[autofocus]")?.focus();
 }
@@ -65,7 +104,11 @@ export function initPanel() {
   p.addEventListener("input", (e) => handlers.input?.(e));
   p.addEventListener("change", (e) => { if (e.target.matches("select, input[type=radio], input[type=checkbox]")) handlers.input?.(e); });
   d.addEventListener("click", (e) => { if (e.target === d) closePanel(); });
-  d.addEventListener("close", () => { handlers.close?.(); handlers = {}; });
+  d.addEventListener("close", () => {
+    handlers.close?.(); handlers = {};
+    const op = opener; opener = null;
+    setTimeout(() => returnFocus(op), 0);
+  });
 }
 
 export const closeBtn = `<button type="button" class="icon-btn" data-act="close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;

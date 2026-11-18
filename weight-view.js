@@ -171,6 +171,7 @@ async function openLog(date = dayKey(), { fromHistory = false } = {}) {
     click: async (act) => {
       if (act === "back") await openHistory();
       if (act === "delete" && existing) {
+        if (!confirm(`Delete the weigh-in on ${fmtDay(existing.date, { weekday: "short", month: "short", day: "numeric" })} (${dec1(existing.kg)} kg)? This cannot be undone.`)) return;
         await db.del("weighIns", existing.date);
         await syncProfileWeight();
         rerender();
@@ -267,12 +268,12 @@ async function importCsv(text) {
   const lines = [
     `Add ${usable.length} weigh-ins from ${usable[0].date} to ${usable[usable.length - 1].date}?`,
     replacing ? `${replacing} of those days already have one, which the file replaces.` : "",
-    skipNote.length ? `${skipNote.length} lines are skipped (${skipNote.slice(0, 3).join("; ")}${skipNote.length > 3 ? "; …" : ""}).` : "",
+    skipNote.length ? `${skipNote.length} ${skipNote.length === 1 ? "line is" : "lines are"} skipped (${skipNote.slice(0, 3).join("; ")}${skipNote.length > 3 ? "; …" : ""}).` : "",
   ].filter(Boolean);
   if (!confirm(lines.join("\n\n"))) { await openHistory("Import cancelled. Nothing changed."); return; }
   const at = new Date().toISOString();
   await db.putMany("weighIns", usable.map((r) => ({ ...r, at })));
   await syncProfileWeight();
   rerender();
-  await openHistory(`Imported ${usable.length} weigh-ins${skipNote.length ? `, skipped ${skipNote.length} lines` : ""}.`, "good");
+  await openHistory(`Imported ${usable.length} weigh-ins${skipNote.length ? `, skipped ${skipNote.length} ${skipNote.length === 1 ? "line" : "lines"}` : ""}.`, "good");
 }

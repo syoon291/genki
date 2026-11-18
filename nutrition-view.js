@@ -2,7 +2,7 @@
 // the profile sheet, the add-food flow (search, quick-add, my foods) and the
 // Today tab's tiles. Targets maths lives in nutrition.js, search in foods.js.
 import * as db from "./db.js";
-import { ACTIVITY, DEFAULT_DEFICIT, MACRO_LIMITS, DEFAULT_PROTEIN_PER_KG, MAX_DEFICIT, PROTEIN_RANGE, MEALS, profileProblems, targets, projection, dayKey, shiftDay, byMeal, sumEntries, entryNutrients, kgToLb, mealForHour } from "./nutrition.js";
+import { ACTIVITY, DEFAULT_DEFICIT, MACRO_LIMITS, DEFAULT_PROTEIN_PER_KG, MAX_DEFICIT, PROTEIN_RANGE, MEALS, profileProblems, targets, projection, dayKey, shiftDay, byMeal, sumEntries, entryNutrients, kgToLb, mealForHour, parseWeeklyCsv } from "./nutrition.js";
 import { SOURCES, fromTableRow, fromMyFood, searchFoods, makeEntry, recentMyFoods, unitLabel } from "./foods.js";
 import { esc, int, dec1, newId, openPanel, swapPanel, closePanel, panelEl, closeBtn, backBtn } from "./ui.js";
 
@@ -125,6 +125,7 @@ export async function nutritionView() {
     <div class="foot-actions">
       <button type="button" class="btn ghost" data-act="n-profile">Profile &amp; targets</button>
       <button type="button" class="btn ghost" data-act="n-myfoods">My foods</button>
+      <button type="button" class="btn ghost" data-act="n-weeks">Weekly history</button>
     </div>
     <p class="hint credits">Food data: Standard Tables of Food Composition in Japan 2020 (MEXT) and USDA FoodData Central. Targets are general guidelines, not medical advice.</p>`;
 }
@@ -151,6 +152,7 @@ export async function handleViewClick(act, el) {
   else if (act === "n-today") { day = dayKey(); rerender(); }
   else if (act === "n-profile") await openProfile();
   else if (act === "n-myfoods") await openMyFoods();
+  else if (act === "n-weeks") await openWeeks();
   else if (act === "n-add") await openAdd(el.dataset.meal);
   else if (act === "n-entry") await openEntry(el.dataset.id);
   else if (act === "n-repeat") await repeatPrevious();
@@ -599,6 +601,76 @@ async function openMyFoods() {
   }
   const dlg = document.querySelector("#panel-dialog");
   if (dlg.open) swapPanel(screen, handlers); else openPanel(screen, handlers);
+}
+
+// ---------- weekly history (imported, read-only) ----------
+
+const g = (v) => (v == null ? "–" : `${int(v)}g`);
+const pct = (v) => (v == null ? "–" : `${int(v)} %`);
+
+async function openWeeks(message = "", tone = "") {
+  const weeks = (await db.getAll("nutritionWeeks")).sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+  const rows = weeks.map((w) => {
+    const split = [w.proteinPct, w.carbPct, w.fatPct].some((v) => v != null) ? ` · P ${pct(w.proteinPct)} / C ${pct(w.carbPct)} / F ${pct(w.fatPct)}` : "";
+    return `<li class="week">
+      <div class="sum-row"><span class="entry-name">${esc(fmtDate(w.weekStart))} – ${esc(fmtDate(w.weekEnd))}</span><span class="entry-num">${int(w.kcal)}<span class="hint"> kcal/day</span></span></div>
+      <p class="hint">Protein ${g(w.protein)} · Carbs ${g(w.carbs)} · Fat ${g(w.fat)} · Fiber ${g(w.fiber)}${split}</p>
+    </li>`;
+  }).join("");
+  const html = `
+    <div class="sheet-head"><h2 id="panel-title">Weekly history</h2>${closeBtn}</div>
+    <p class="sub">Daily averages per week, imported from another app. Shown as history only: they do not count toward today's targets.</p>
+    <div class="foot-actions tight">
+      <button type="button" class="btn ghost" data-act="import">Import CSV</button>
+      ${weeks.length ? `<button type="button" class="btn danger" data-act="clear">Remove all</button>` : ""}
+    </div>
+    <p class="hint">CSV columns: <code>week_start,week_end,net_kcal_per_day,protein_g,carbs_g,fat_g,fiber_g,carb_pct,fat_pct,protein_pct</code>, dates as YYYY-MM-DD. A week already here is replaced.</p>
+    <p class="msg ${tone}" role="status">${esc(message)}</p>
+    ${rows ? `<ul class="entries weeks" aria-label="Weeks, newest first">${rows}</ul>` : `<p class="hint">No weeks imported yet.</p>`}`;
+  const handlers = {
+    click: async (act) => {
+      if (act === "import") pickWeeksCsv();
+      if (act === "clear" && confirm(`Remove all ${weeks.length} imported weeks? Your food log is not touched. This cannot be undone.`)) {
+        await db.replaceAll({ nutritionWeeks: [] });
+        await openWeeks("Weekly history removed.", "good");
+      }
+    },
+  };
+  if (document.querySelector("#panel-dialog").open) swapPanel(html, handlers); else openPanel(html, handlers);
+}
+
+let weeksInput;
+function pickWeeksCsv() {
+  if (!weeksInput) {
+    weeksInput = Object.assign(document.createElement("input"), { type: "file", accept: ".csv,text/csv,text/plain", hidden: true });
+    document.body.append(weeksInput);
+    weeksInput.addEventListener("change", async () => {
+      const file = weeksInput.files[0];
+      weeksInput.value = "";
+      if (!file) return;
+      try { await importWeeks(await file.text()); }
+      catch (err) { await openWeeks(`Import failed: ${err.message}. Nothing changed.`, "bad"); }
+    });
+  }
+  weeksInput.click();
+}
+
+async function importWeeks(text) {
+  const { rows, skipped } = parseWeeklyCsv(text);
+  const skipNote = skipped.map((s) => `line ${s.line}: ${s.reason}`);
+  const few = (list) => `${list.slice(0, 3).join("; ")}${list.length > 3 ? "; …" : ""}`;
+  if (!rows.length) { await openWeeks(`No weeks found in that file.${skipNote.length ? ` Skipped ${few(skipNote)}.` : ""}`, "bad"); return; }
+  const have = new Set((await db.getAll("nutritionWeeks")).map((w) => w.weekStart));
+  const replacing = rows.filter((r) => have.has(r.weekStart)).length;
+  const lines = [
+    `Add ${rows.length} ${rows.length === 1 ? "week" : "weeks"} of nutrition history, ${rows[0].weekStart} to ${rows[rows.length - 1].weekEnd}?`,
+    replacing ? `${replacing} of those weeks are already here and the file replaces them.` : "",
+    skipNote.length ? `${skipNote.length} ${skipNote.length === 1 ? "line is" : "lines are"} skipped (${few(skipNote)}).` : "",
+  ].filter(Boolean);
+  if (!confirm(lines.join("\n\n"))) { await openWeeks("Import cancelled. Nothing changed."); return; }
+  const at = new Date().toISOString();
+  await db.putMany("nutritionWeeks", rows.map((r) => ({ ...r, source: "csv", at })));
+  await openWeeks(`Imported ${rows.length} ${rows.length === 1 ? "week" : "weeks"}${skipNote.length ? `, skipped ${skipNote.length} ${skipNote.length === 1 ? "line" : "lines"}` : ""}.`, "good");
 }
 
 // ---------- edit an entry ----------

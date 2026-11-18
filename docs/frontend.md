@@ -11,19 +11,21 @@ status: current
 
 ## Tabs
 
-The bottom bar has three tabs. The current tab lives in the URL hash (`#today`, `#nutrition`, `#workouts`; anything else shows Today), so a reload or a link lands on the same tab. Changing tabs moves focus to the view and marks the tab button with `aria-current="page"`.
+The bottom bar has three tabs. The current tab lives in the URL hash (`#today`, `#nutrition`, `#workouts`; anything else shows Today), so a reload or a link lands on the same tab. Changing tabs moves focus to the view, marks the tab button with `aria-current="page"` and sets the page title (for example "Nutrition · genki").
+
+Focus survives a re-render: a view replaces its HTML on every change, so `render()` re-focuses the control that had focus (found by its `data-*` attributes, `focusKey()` in `ui.js`), and when a sheet closes after its opener was re-rendered away, focus goes to the same control in the new view (or the view itself). `html` has scroll padding for the sticky header and the tab bar, so a focused control is never hidden under them.
 
 | Tab | What it shows now |
 |-----|-------------------|
 | Today | Greeting by time of day, the date, Calories and Protein tiles plus smaller Carbs and Fat tiles (left of today's targets, see [nutrition.md](nutrition.md#today-tab)), a "Log food" button, the weight card (7-day average, progress to goal, chart; see [weight.md](weight.md)), and a "Next workout" card (the next plan day with a Start button, or the session in progress with Continue; see [workouts.md](workouts.md)) |
-| Nutrition | The day's food log against the targets, with the profile, add-food and my-foods sheets. See [nutrition.md](nutrition.md) |
+| Nutrition | The day's food log against the targets, with the profile, add-food, my-foods and weekly history sheets. See [nutrition.md](nutrition.md) |
 | Workouts | Train / Progress / Plan, ported from Liftlog: the plan builder, logging a session, records and charts. See [workouts.md](workouts.md) |
 
 If IndexedDB cannot be opened (private browsing in some browsers, storage blocked), every tab shows a "Storage is unavailable" banner and nothing is saved.
 
 ## General sheet
 
-`ui.js` drives a second `<dialog>` (`#panel-dialog`, same bottom-sheet look) that views fill with their own content: `openPanel(html, handlers)` shows it, `swapPanel()` replaces its content for the next step of a flow (with a back button), `closePanel()` hides it. Handlers get every tap on a `[data-act]` element, every form submit (default prevented) and every input change inside it; `data-act="close"` always closes. Forms use `novalidate` and show the first problem in a status line.
+`ui.js` drives a second `<dialog>` (`#panel-dialog`, same bottom-sheet look) that views fill with their own content: `openPanel(html, handlers)` shows it, `swapPanel()` replaces its content for the next step of a flow (with a back button), `closePanel()` hides it. Handlers get every tap on a `[data-act]` element, every form submit (default prevented) and every input change inside it; `data-act="close"` always closes. Closing returns focus to the control that opened the sheet. Forms use `novalidate` and show the first problem in a status line.
 
 ## Data & backup sheet
 

@@ -49,6 +49,12 @@ Picking a food asks for an amount and a unit: grams for table foods (plus USDA's
 
 **My foods** are the owner's own items with per-serving numbers (name, serving label, optional serving weight, kcal, protein, carbs, fat). The My foods sheet lists, creates, edits and deletes them; each use bumps a counter and a last-used time for the recent list.
 
+## Weekly history
+
+Weekly nutrition averages from another app (for example an old tracker's export) can be imported as read-only history: the Nutrition tab's **Weekly history** button opens a sheet that lists the weeks newest first (dates, kcal a day, protein, carbs, fat and fiber in grams, and the protein / carb / fat split when the file has it). They never count toward a day's targets or totals and cannot be edited in genki.
+
+The CSV has the columns `week_start,week_end,net_kcal_per_day,protein_g,carbs_g,fat_g,fiber_g,carb_pct,fat_pct,protein_pct`. A header row names them (any order; other columns are ignored); without one they are read in that order. `week_start`, `week_end` (YYYY-MM-DD, the end on or after the start) and `net_kcal_per_day` are required, the rest may be blank; percents may end in `%`. Delimiters, quotes, a BOM, `#` lines and decimal commas work as in the weigh-in import ([weight.md](weight.md#csv-import)). Bad rows are skipped with their line number; when a week appears twice the later row wins. A confirm prompt says how many weeks will be added, over which dates, how many replace weeks already there, and what was skipped. Weeks are stored in `nutritionWeeks`, keyed by `week_start` (shape in [data-flow.md](data-flow.md#store)), so a re-import replaces matching weeks. **Remove all** (with a confirm) clears the imported weeks only. Parsing is `parseWeeklyCsv` in `nutrition.js` (`tests/weekly.test.mjs`).
+
 ## Food tables
 
 Both tables are trimmed to energy, protein, fat and carbohydrate per 100 g, one row per food: `[id, name, kcal, protein, fat, carbs, portions?]`, ids prefixed `jp` / `us`. Each file's `meta` carries the source, URL and license, and the app's Nutrition tab credits both.
