@@ -1,6 +1,6 @@
-// genki app shell: three tabs (Today / Nutrition / Workouts) rendered into
+// genki app shell: four tabs (Today / Nutrition / Workouts / Progress) rendered into
 // (Today: the nutrition tiles, the weight card from weight-view.js and the
-// next-workout card from workouts-view.js)
+// next-workout card from workouts-view.js; Progress: the week views from progress-view.js)
 // <main id="view">, and the Data & backup sheet (JSON export/import, and the
 // Sync section from sync-view.js).
 // The tab is kept in the URL hash so a reload stays where you were.
@@ -13,9 +13,10 @@ import { nutritionView, todayTiles, handleViewClick, setRerender } from "./nutri
 import { weightCard, handleWeightClick, setWeightRerender, syncProfileWeight } from "./weight-view.js";
 import { detectMfpFile, parseMfpNutrition, parseMfpWeights, planMfpImport, mfpConfirmText, planIsEmpty } from "./mfp.js";
 import { dayKey } from "./nutrition.js";
+import { progressView, handleProgressClick, setProgressRerender } from "./progress-view.js";
 import { workoutsView, nextWorkoutCard, handleLiftClick, handleLiftInput, setLiftRerender, initRestTimer } from "./workouts-view.js";
 
-const TABS = ["today", "nutrition", "workouts"];
+const TABS = ["today", "nutrition", "workouts", "progress"];
 const $ = (sel, root = document) => root.querySelector(sel);
 const view = $("#view");
 const dialog = $("#data-dialog");
@@ -49,6 +50,7 @@ const RENDER = {
     ${storeError ? "" : await nextWorkoutCard()}`,
   nutrition: () => (storeError ? `<h2>Nutrition</h2>` : nutritionView()),
   workouts: () => (storeError ? `<h2>Workouts</h2>` : workoutsView()),
+  progress: () => (storeError ? `<h2>Progress</h2>` : progressView()),
 };
 
 // Views read IndexedDB, so rendering is async; a newer render wins over a slower older one.
@@ -79,13 +81,14 @@ async function render() {
 setRerender(() => render());
 setWeightRerender(() => render());
 setLiftRerender(() => render());
+setProgressRerender(() => render());
 initPanel();
 initRestTimer();
 view.addEventListener("click", (e) => {
   const el = e.target.closest("[data-act]");
   if (!el || !view.contains(el)) return;
   const act = el.dataset.act;
-  const handler = act.startsWith("lift-") ? handleLiftClick : act.startsWith("w-") ? handleWeightClick : handleViewClick;
+  const handler = act.startsWith("lift-") ? handleLiftClick : act.startsWith("w-") ? handleWeightClick : act.startsWith("p-") ? handleProgressClick : handleViewClick;
   handler(act, el).catch((err) => alert(`That did not work: ${err.message}`));
 });
 // Typing in the workout set rows and picking from its selects.
