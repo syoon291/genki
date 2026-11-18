@@ -5,6 +5,7 @@
 import * as db from "./db.js";
 import { ACTIVITY, DEFAULT_DEFICIT, MACRO_LIMITS, DEFAULT_PROTEIN_PER_KG, MAX_DEFICIT, PROTEIN_RANGE, MEALS, profileProblems, targets, projection, dayKey, shiftDay, byMeal, sumEntries, entryNutrients, kgToLb, mealForHour, parseWeeklyCsv, dayTotalsMessage, weekDays, pctOfTargets } from "./nutrition.js";
 import { SOURCES, EXTRAS, extrasOf, fromTableRow, fromMyFood, searchFoods, makeEntry, scaleNutrients, recentLogged, pairedFoods, foodLogKey, servingSizes, itemFromEntry, itemsTotal, mealEntries, recipePerServing, parseMyFoodsFile, planMyFoodsImport } from "./foods.js";
+import { exerciseLine } from "./trackers-view.js";
 import { esc, int, dec1, newId, announce, openPanel, swapPanel, closePanel, panelEl, closeBtn, backBtn } from "./ui.js";
 
 // The day shown in the Nutrition tab (YYYY-MM-DD, local); resets to today on reload.
@@ -79,6 +80,7 @@ export async function nutritionView() {
   }
 
   const extraLine = extrasText(itemsTotal(entries));
+  const exLine = await exerciseLine(day, total.kcal);
   const summary = t ? `
     <div class="card summary">
       <div class="sum-row">
@@ -96,10 +98,12 @@ export async function nutritionView() {
         ${macroRow("Fat", total.fat, t.macros.fat, "fat")}
       </div>
       ${extraLine ? `<p class="macros">${extraLine}</p>` : ""}
+      ${exLine}
     </div>` : `
     <div class="card summary">
       <div class="sum-row"><div><span class="stat-label">Eaten</span><span class="sum-big">${int(total.kcal)}</span><span class="muted"> kcal</span></div><div class="right"><span class="sum-big protein-text">${int(total.protein)}g</span><span class="muted"> protein</span></div></div>
       <p class="macros">Carbs ${int(total.carbs)}g · Fat ${int(total.fat)}g${extraLine ? ` · ${extraLine}` : ""}</p>
+      ${exLine}
       <button type="button" class="btn" data-act="n-profile">Set up your profile for daily targets</button>
     </div>`;
 

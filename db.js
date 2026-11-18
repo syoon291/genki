@@ -4,10 +4,10 @@
 import { TOMBSTONES, tombstoneId, withTombstones } from "./merge.js";
 
 export const DB_NAME = "genki";
-export const DB_VERSION = 7;
+export const DB_VERSION = 8;
 
 // The keyPath of each store, so a backup can be checked before it replaces anything.
-export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id", weighIns: "date", workouts: "id", nutritionWeeks: "weekStart", [TOMBSTONES]: "id", myMeals: "id" };
+export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id", weighIns: "date", workouts: "id", nutritionWeeks: "weekStart", [TOMBSTONES]: "id", myMeals: "id", days: "date", fasts: "id" };
 
 // UPGRADES[n] moves a database from version n to n+1.
 const UPGRADES = [
@@ -43,6 +43,13 @@ const UPGRADES = [
     // My meals: several foods saved as one item and logged together:
     // { id, name, items: [{ name, source, ref, amount, unit, base }], uses, lastUsed, createdAt }.
     db.createObjectStore("myMeals", { keyPath: KEY_PATHS.myMeals });
+  },
+  (db) => {
+    // Day trackers. Days: one record per local day, { date, water (glasses),
+    // exerciseKcal, steps, exerciseSource? }. Fasts: { id, start, end (ISO, null
+    // while running), goalHours }. New stores only: no existing record changes.
+    db.createObjectStore("days", { keyPath: KEY_PATHS.days });
+    db.createObjectStore("fasts", { keyPath: KEY_PATHS.fasts });
   },
 ];
 

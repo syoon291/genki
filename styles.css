@@ -495,3 +495,21 @@ fieldset.plain legend { padding: 0; margin-bottom: 6px; }
 .split-table tbody th { font-weight: 600; }
 .export { margin-top: 24px; display: grid; gap: 6px; }
 .export .hint { margin: 0; text-align: center; }
+
+/* ---------- day trackers (fasting, water, exercise) ---------- */
+.fast .bar { margin: 10px 0 4px; }
+.fast > .btn, .fast .stack { margin-top: 12px; }
+.fast .foot-actions { margin-top: 10px; }
+.fast-clock { font-variant-numeric: tabular-nums; }
+.fast .right, .fast .sum-row .muted { white-space: nowrap; }
+.reminder { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); font-size: 14px; }
+.reminder strong { color: var(--accent-deep); }
+.tracker .stat-value .of { font-size: 16px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+.tracker .net { color: var(--ink); }
+.tracker > .btn { margin-top: auto; }
+.tracker .hint + .btn { margin-top: 10px; }
+.stepper { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.stepper .icon-btn { width: 100%; }
+.icon-btn.primary { background: var(--accent); color: var(--accent-ink); }
+.icon-btn:disabled { opacity: .4; cursor: default; }
+.tracker .link-btn { align-self: flex-start; }
