@@ -1,7 +1,7 @@
 // Offline support: the app shell is cached on install, then every same-origin
 // GET is served network first (fresh code when online), cache when offline.
 const CACHE = "genki-v7";
-const SHELL = ["./", "index.html", "styles.css", "app.js", "db.js", "backup.js", "sync.js", "sync-view.js", "merge.js", "ui.js", "contrast.js", "nutrition.js", "foods.js", "nutrition-view.js", "weight.js", "weight-view.js", "mfp.js", "workouts.js", "workouts-view.js", "progress.js", "progress-view.js", "trackers.js", "trackers-view.js", "coach.js", "coach-view.js", "foods/jp.json", "foods/us.json", "manifest.webmanifest", "icons/icon.svg", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png"];
+const SHELL = ["./", "index.html", "styles.css", "app.js", "db.js", "backup.js", "sync.js", "sync-view.js", "merge.js", "ui.js", "contrast.js", "nutrition.js", "foods.js", "nutrition-view.js", "weight.js", "weight-view.js", "mfp.js", "workouts.js", "workouts-view.js", "progress.js", "progress-view.js", "trackers.js", "trackers-view.js", "coach.js", "coach-view.js", "barcode.js", "openfoodfacts.js", "scan-view.js", "foods/jp.json", "foods/us.json", "manifest.webmanifest", "icons/icon.svg", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -15,7 +15,7 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  // Only this site's files: GitHub API calls (sync) always go to the network.
+  // Only this site's files: GitHub API calls (sync) and barcode lookups always go to the network.
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
   e.respondWith(
     // no-cache: revalidate with the server, so Pages' max-age never serves stale code.

@@ -1,12 +1,15 @@
 // Nutrition tab: the day's food log against the calorie and protein targets,
 // the profile sheet, the add-food flow (recently logged, search, serving sizes,
-// several days, quick add, my meals), my foods and recipes, and the Today
+// several days, quick add, my meals, barcode scan and voice search), my foods
+// and recipes, and the Today
 // tab's tiles. Targets maths lives in nutrition.js, search in foods.js.
 import * as db from "./db.js";
 import { ACTIVITY, DEFAULT_DEFICIT, MACRO_LIMITS, DEFAULT_PROTEIN_PER_KG, MAX_DEFICIT, PROTEIN_RANGE, MEALS, profileProblems, targets, projection, dayKey, shiftDay, byMeal, sumEntries, entryNutrients, kgToLb, mealForHour, parseWeeklyCsv, dayTotalsMessage, weekDays, pctOfTargets } from "./nutrition.js";
 import { SOURCES, EXTRAS, extrasOf, fromTableRow, fromMyFood, searchFoods, makeEntry, scaleNutrients, recentLogged, pairedFoods, foodLogKey, servingSizes, itemFromEntry, itemsTotal, mealEntries, recipePerServing, parseMyFoodsFile, planMyFoodsImport } from "./foods.js";
 import { exerciseLine } from "./trackers-view.js";
 import { esc, int, dec1, newId, announce, openPanel, swapPanel, closePanel, panelEl, closeBtn, backBtn } from "./ui.js";
+import { openScanner, micBtn, startVoice, stopVoice } from "./scan-view.js";
+import { lookupBarcode } from "./openfoodfacts.js";
 
 // The day shown in the Nutrition tab (YYYY-MM-DD, local); resets to today on reload.
 let day = dayKey();
@@ -482,7 +485,12 @@ function foodFlow(ctx, swap) {
       <label class="field inline"><span>Meal</span><select name="meal" id="add-meal">${mealOptions(ctx.meal)}</select></label>
       <button type="button" class="btn ghost small-btn" data-act="quick">Quick add</button>
     </div>` : ""}
-    <input type="search" id="food-q" class="search" placeholder="Search foods (e.g. chicken breast, natto)" aria-label="Search foods" autocomplete="off" value="${esc(ctx.query)}" autofocus>
+    <div class="search-row">
+      <input type="search" id="food-q" class="search" placeholder="Search foods (e.g. natto)" aria-label="Search foods" autocomplete="off" value="${esc(ctx.query)}" autofocus>
+      ${micBtn()}
+      ${scanBtn}
+    </div>
+    <p class="msg bad" role="status" id="voice-msg"></p>
     <div id="results" class="results" aria-live="polite"></div>`;
 
   const findMeal = (id) => ctx.myMeals.find((m) => m.id === id) ?? mealHits.get(id);
@@ -511,16 +519,37 @@ function foodFlow(ctx, swap) {
       else if (act === "meal") showMeal(findMeal(el.dataset.id));
       else if (act === "meal-add") await logMeal(findMeal(el.dataset.id), 1, ctx.meal, new Set([day]));
       else if (act === "quick") showQuick();
+      else if (act === "scan") scan();
+      else if (act === "voice") startVoice(panelEl().querySelector("#food-q"), el, (t) => { const m = panelEl().querySelector("#voice-msg"); if (m) m.textContent = t; });
       else if (act === "day-tog") { toggleDay(ctx, el); updateAmountPreview(); updateQuickPreview(); updateMealPreview(); }
-      else if (act === "back") { swapPanel(searchScreen(), handlers); showResults(); }
+      else if (act === "back") toSearch();
       else if (act === "exit") ctx.onExit?.();
     },
+    close: stopVoice,
     submit: async (form) => {
       if (form.id === "amount-form") await addPicked(form);
       if (form.id === "quick-form") await addQuick(form);
       if (form.id === "meal-form") await addMealForm(form);
     },
   };
+
+  function toSearch() { swapPanel(searchScreen(), handlers); showResults(); }
+
+  // ----- barcode: a my food with that code, else a lookup and a save step -----
+  function scan() {
+    stopVoice();
+    openScanner({
+      onBack: toSearch,
+      onCode: (code) => barcodeStep(code, {
+        myFoodsRaw: ctx.myFoodsRaw,
+        onBack: scan,
+        onFood: (rec, isNew) => {
+          if (isNew) { ctx.myFoodsRaw.push(rec); ctx.myFoods.push(fromMyFood(rec)); }
+          showAmount(fromMyFood(rec));
+        },
+      }),
+    });
+  }
 
   const chosenDays = () => [...ctx.days].sort();
   const noDays = (msgId) => {
@@ -734,20 +763,74 @@ function foodFlow(ctx, swap) {
   showResults();
 }
 
+const scanBtn = `<button type="button" class="icon-btn scan-btn" data-act="scan" aria-label="Scan a barcode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 9v6M11 9v6M14 9v6M17 9v6"/></svg></button>`;
+
+// After a scan: the my food with that barcode if there is one (onFood(rec,
+// false)); else Open Food Facts is asked and its numbers fill a save form (or
+// an empty one when it does not know the code). Saving stores a my food that
+// keeps the barcode, so the next scan finds it here (onFood(rec, true)).
+let lookupSeq = 0;
+async function barcodeStep(code, { myFoodsRaw, onBack, onFood }) {
+  const mine = myFoodsRaw.find((f) => f.barcode === code);
+  if (mine) { announce(`Found ${mine.name} in my foods.`); onFood(mine, false); return; }
+  const waiting = { click: (act) => { if (act === "back") onBack(); } };
+  swapPanel(`
+    <div class="sheet-head">${backBtn()}<h2 id="panel-title" class="grow">Barcode ${esc(code)}</h2>${closeBtn}</div>
+    <p class="msg" role="status" id="lookup-wait">Looking it up on Open Food Facts…</p>`, waiting);
+  const seq = ++lookupSeq;
+  const res = await lookupBarcode(code);
+  // The owner may have gone back (or on to another scan) or closed the sheet meanwhile.
+  if (seq !== lookupSeq || !panelEl().querySelector("#lookup-wait") || !document.querySelector("#panel-dialog").open) return;
+  const food = res.status === "found" ? res.food : { name: res.name ?? "", serving: "1 serving" };
+  const intro = res.status === "found"
+    ? `Found on Open Food Facts${food.brand ? ` (${esc(food.brand)})` : ""}. Check the numbers against the label, then save.`
+    : res.status === "missing"
+      ? `Open Food Facts does not know this barcode${food.name ? "'s numbers" : ""} yet. Type them from the label; the next scan finds it in my foods.`
+      : `${esc(res.message)}. Type the numbers from the label, or go back and try again.`;
+  let saving = false;
+  const handlers = {
+    click: (act) => { if (act === "back") onBack(); },
+    submit: async (form) => {
+      if (saving) return; // a double tap must not save the food twice
+      const msg = panelEl().querySelector("#scan-save-msg");
+      const f = readMyFood(form);
+      const problem = myFoodProblem(f);
+      if (problem) { msg.textContent = problem; return; }
+      const now = new Date().toISOString();
+      const rec = { id: newId(), ...f, barcode: code, uses: 0, lastUsed: "", createdAt: now };
+      saving = true;
+      try { await db.put("myFoods", rec); }
+      catch { saving = false; msg.textContent = "Could not save this food. Try again."; return; }
+      announce(`Saved ${rec.name} to my foods.`);
+      onFood(rec, true);
+    },
+  };
+  swapPanel(`
+    <div class="sheet-head">${backBtn()}<h2 id="panel-title" class="grow">Save to my foods</h2>${closeBtn}</div>
+    <p class="sub">${intro}</p>
+    <p class="hint">Barcode ${esc(code)} · numbers per serving</p>
+    <form class="form" id="scan-save-form" novalidate>
+      ${myFoodFields(food, { focus: res.status !== "found" })}
+      <button class="btn" type="submit">Save to my foods</button>
+      <p class="msg bad" role="status" id="scan-save-msg"></p>
+    </form>`, handlers);
+  if (res.status === "found") announce(`Found ${food.name || "it"}. Check the numbers, then save.`);
+}
+
 // ---------- my food fields (quick add and the my-foods editor) ----------
 
-function myFoodFields(f, { serving = true } = {}) {
+function myFoodFields(f, { serving = true, focus = true } = {}) {
   const v = (x) => (x === null || x === undefined ? "" : esc(x));
   const hasExtra = EXTRAS.some((x) => f[x.id] != null);
   return `
-    <label class="field"><span>Name</span><input name="name" type="text" required maxlength="80" value="${v(f.name)}" autocomplete="off" ${f.name ? "" : "autofocus"}></label>
+    <label class="field"><span>Name</span><input name="name" type="text" required maxlength="80" value="${v(f.name)}" autocomplete="off" ${focus && !f.name ? "autofocus" : ""}></label>
     ${serving ? `<label class="field"><span>Brand or place (optional)</span><input name="brand" type="text" maxlength="60" value="${v(f.brand)}" autocomplete="off"></label>
     <div class="grid2">
       <label class="field"><span>Serving</span><input name="serving" type="text" maxlength="40" placeholder="1 pack" value="${v(f.serving)}"></label>
       <label class="field"><span>Serving weight (g, optional)</span><input name="grams" type="number" inputmode="decimal" min="0" step="any" value="${v(f.grams)}"></label>
     </div>` : ""}
     <div class="grid2">
-      <label class="field"><span>Calories (kcal)</span><input name="kcal" type="number" inputmode="decimal" min="0" step="any" value="${v(f.kcal)}" ${f.name ? "autofocus" : ""}></label>
+      <label class="field"><span>Calories (kcal)</span><input name="kcal" type="number" inputmode="decimal" min="0" step="any" value="${v(f.kcal)}" ${focus && f.name ? "autofocus" : ""}></label>
       <label class="field"><span>Protein (g)</span><input name="protein" type="number" inputmode="decimal" min="0" step="any" value="${v(f.protein)}"></label>
     </div>
     <div class="grid2">
@@ -801,6 +884,7 @@ async function openMyFoods(message = "", tone = "good") {
     <div class="foot-actions tight">
       <button type="button" class="btn" data-act="new">New food</button>
       <button type="button" class="btn ghost" data-act="new-recipe">New recipe</button>
+      <button type="button" class="btn ghost" data-act="scan">Scan barcode</button>
       <button type="button" class="btn ghost" data-act="import">Import My foods…</button>
     </div>
     <p class="msg ${tone}" role="status">${esc(message)}</p>
@@ -810,6 +894,7 @@ async function openMyFoods(message = "", tone = "good") {
       if (act === "new") editMyFood(null);
       else if (act === "new-recipe") await editRecipe(null);
       else if (act === "import") pickMyFoodsFile();
+      else if (act === "scan") scanToMyFoods();
       else if (act === "edit") {
         const f = foods.find((x) => x.id === el.dataset.id);
         if (f?.recipe) await editRecipe(f); else editMyFood(f);
@@ -830,9 +915,20 @@ async function openMyFoods(message = "", tone = "good") {
       await openMyFoods();
     },
   };
+  function scanToMyFoods() {
+    openScanner({
+      onBack: () => openMyFoods(),
+      onCode: (code) => barcodeStep(code, {
+        myFoodsRaw: foods,
+        onBack: scanToMyFoods,
+        onFood: (rec, isNew) => openMyFoods(isNew ? `Saved "${rec.name}" to my foods.` : `"${rec.name}" is already in my foods.`),
+      }),
+    });
+  }
   function editMyFood(f) {
     swapPanel(`
       <div class="sheet-head">${backBtn()}<h2 id="panel-title" class="grow">${f ? "Edit food" : "New food"}</h2>${closeBtn}</div>
+      ${f?.barcode ? `<p class="sub">Barcode ${esc(f.barcode)}</p>` : ""}
       <form class="form" id="myfood-form" data-id="${f ? esc(f.id) : ""}" novalidate>
         ${myFoodFields(f ?? { serving: "1 serving" })}
         <button class="btn" type="submit">Save</button>

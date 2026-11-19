@@ -23,7 +23,7 @@ The service worker (`sw.js`) caches the app shell on install and then serves eve
 
 - The shell includes the food tables, so food search works offline after the first online open (install downloads about 1 MB once).
 - An installed app picks up new code the next time it opens online; no cache-name bump is needed for ordinary changes.
-- Only this site's files go through the service worker: sync's calls to `api.github.com` always go to the network (and fail offline, which the Sync section reports).
+- Only this site's files go through the service worker: sync's calls to `api.github.com` and barcode lookups on Open Food Facts always go to the network (and fail offline, which the Sync section and the scan's save step report).
 - Offline, it serves the last cached copy; an uncached page navigation falls back to `index.html`, any other uncached file fails as a network error.
 - Changing the cache name (`CACHE` in `sw.js`) makes the next activation delete every older cache. Do that only when old cached files must be dropped, for example after removing or renaming a shell file.
 
