@@ -30,7 +30,7 @@ A weigh-in is one weight in kg for one local day (store `weighIns`, keyed by the
 
 ## Chart
 
-An inline SVG: grey dots for each weigh-in, a green line for the 7-day average, a dashed green line at the goal weight, and, with a target date, a dotted plan line from the start weight on the first weigh-in day to the goal on the target date. Ranges: 1M (30 days), 3M (91 days, the default) and All (the first weigh-in to the latest, extended to the target date when that is later). The y axis pads a narrow range to at least 2 kg and steps in round numbers; the goal is always kept in view. The SVG has a text label summarising it for screen readers.
+An inline SVG: solid grey dots for each weigh-in (`--muted`, so they hold 7:1 in every theme), a green line for the 7-day average, a dashed green line at the goal weight, and, with a target date, a dotted plan line from the start weight on the first weigh-in day to the goal on the target date. Ranges: 1M (30 days), 3M (91 days, the default) and All (the first weigh-in to the latest, extended to the target date when that is later). The y axis pads a narrow range to at least 2 kg and steps in round numbers; the goal is always kept in view. The SVG has a text label summarising it for screen readers.
 
 ## CSV import
 

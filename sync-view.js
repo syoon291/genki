@@ -9,7 +9,8 @@ import { REPO, PATH, checkAccess, fetchRemote, mergeSync, syncDue, looksLikeToke
 
 // Device keys: syncToken, syncSha (the file version this device last wrote or
 // restored: set means this device is linked and may auto-sync), lastSyncedAt,
-// lastSyncError.
+// lastSyncError, syncNoticeHidden (the Today notice for lastSyncError was
+// dismissed; cleared by the next automatic failure, so a new failure shows again).
 let busy = false;
 let note = { msg: "", tone: "" };
 let rerender = () => {};
@@ -108,7 +109,7 @@ export function handleSyncAct(act) {
   if (act === "sync-forget") {
     run(async () => {
       if (!confirm("Remove the GitHub token from this device? The copy in genki-data stays.")) return;
-      for (const k of ["syncToken", "syncSha", "lastSyncedAt", "lastSyncError"]) await db.delDevice(k);
+      for (const k of ["syncToken", "syncSha", "lastSyncedAt", "lastSyncError", "syncNoticeHidden"]) await db.delDevice(k);
       say("Token removed.", "good");
     });
     return true;
@@ -194,8 +195,31 @@ async function restore() {
   say(`Restored ${total} records.`, "good");
 }
 
+// The Today tab's notice for a failed automatic sync: shown until a sync
+// succeeds or it is dismissed. Empty when there is nothing to show.
+export async function syncErrorNotice() {
+  let error = null, hidden = false;
+  try {
+    error = await db.getDevice("lastSyncError", null);
+    hidden = !!(await db.getDevice("syncNoticeHidden", false));
+  } catch (e) { console.warn("genki: could not read the sync state", e); return ""; }
+  if (!error || hidden) return "";
+  return `
+    <div class="card warn-card sync-notice" role="status">
+      <div>
+        <strong>Sync failed.</strong> <span class="small">${esc(error)}</span>
+        <button type="button" class="link-btn" data-act="sync-notice-open">Open Sync</button>
+      </div>
+      <button type="button" class="icon-btn" data-act="sync-notice-hide" aria-label="Dismiss sync notice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>`;
+}
+
+export async function hideSyncNotice() {
+  await db.setDevice("syncNoticeHidden", true);
+}
+
 // On open: a linked device with a token syncs once a local day, quietly.
-// A failure is kept to show in the Sync section, never thrown.
+// A failure is kept to show in the Sync section and on Today, never thrown.
 export async function autoSync(now = new Date()) {
   try {
     const token = await db.getDevice("syncToken", null);
@@ -206,9 +230,9 @@ export async function autoSync(now = new Date()) {
     try { await syncNow({ interactive: false }); }
     finally { busy = false; }
   } catch (e) {
-    try { await db.setDevice("lastSyncError", e.message); }
+    try { await db.setDevice("lastSyncError", e.message); await db.delDevice("syncNoticeHidden"); }
     catch (e2) { console.warn("genki: auto-sync failed and its error could not be saved", e, e2); }
   }
   note = { msg: "", tone: "" };
-  try { await rerender(); } catch (e) { console.warn("genki: could not redraw the Sync section", e); }
+  try { await rerender(); } catch (e) { console.warn("genki: could not redraw after the sync", e); }
 }

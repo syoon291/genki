@@ -128,7 +128,7 @@ function chart(list, profile) {
   const goalLine = goal !== null && goal >= axis.min && goal <= axis.max
     ? `<line class="goal-line" x1="${PAD.l}" x2="${W - PAD.r}" y1="${f(y(goal))}" y2="${f(y(goal))}"/><text class="tick goal-label" x="${PAD.l + 4}" y="${f(y(goal) - 5)}" text-anchor="start">Goal ${dec1(goal)}</text>` : "";
   const planLine = plan ? `<line class="plan-line" x1="${f(x(plan.a.date))}" y1="${f(y(plan.a.kg))}" x2="${f(x(plan.b.date))}" y2="${f(y(plan.b.kg))}"/>` : "";
-  const dots = shown.map((p) => `<circle class="dot-kg" cx="${f(x(p.date))}" cy="${f(y(p.kg))}" r="2.6"/>`).join("");
+  const dots = shown.map((p) => `<circle class="dot-kg" cx="${f(x(p.date))}" cy="${f(y(p.kg))}" r="3"/>`).join("");
   const avgPath = shown.length > 1 ? `<polyline class="avg-line" points="${shown.map((p) => `${f(x(p.date))},${f(y(p.avg))}`).join(" ")}"/>` : "";
   const label = `Weight from ${fmtDay(from)} to ${fmtDay(to)}: ${shown.length} weigh-ins, 7-day average now ${dec1(s.avg)} kg${goal !== null ? `, goal ${dec1(goal)} kg` : ""}.`;
   return `<figure class="chart">

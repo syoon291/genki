@@ -155,6 +155,10 @@ h3 { font-size: 13px; margin: 24px 0 8px; color: var(--muted); font-weight: 650;
 .empty p { margin: 0 0 8px; }
 .empty .btn { margin-top: 6px; }
 .warn-card { background: var(--warn-soft); border-color: transparent; color: var(--ink); margin: 12px 0; }
+.sync-notice { display: flex; align-items: flex-start; gap: 8px; padding: 12px 8px 12px 16px; }
+.sync-notice > div { flex: 1; min-width: 0; padding-top: 4px; overflow-wrap: anywhere; }
+.sync-notice .link-btn { display: block; min-height: 44px; }
+.sync-notice .icon-btn { flex: none; background: transparent; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -295,12 +299,13 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .chart .goal-label { fill: var(--good); font-weight: 650; }
 .chart .goal-line { stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .chart .plan-line { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 2 4; }
-.chart .dot-kg { fill: color-mix(in srgb, var(--muted) 75%, transparent); stroke: none; }
+/* Solid --muted (7:1 on every surface, 10:1 in High contrast) so the dots read in every theme. */
+.chart .dot-kg { fill: var(--muted); stroke: none; }
 .chart .avg-line { stroke: var(--accent); stroke-width: 2.5; fill: none; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 12px; color: var(--muted); }
 .key::before { content: ""; display: inline-block; vertical-align: middle; margin-right: 6px; }
 .key.avg::before { width: 14px; height: 3px; border-radius: 2px; background: var(--accent); }
-.key.kg::before { width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 75%, transparent); }
+.key.kg::before { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
 .key.plan::before { width: 14px; border-top: 2px dotted var(--muted); }
 .range { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .range button { min-height: 44px; border: 0; border-radius: 10px; background: var(--surface-2); color: var(--ink); font-size: 14px; font-weight: 600; }
