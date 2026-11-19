@@ -4,8 +4,9 @@
 // from a template, units, CSV export, Liftlog import). Also the Today tab's
 // "Next workout" card. The maths lives in workouts.js.
 //
-// State: finished sessions in the `workouts` store; the plan, the rotation
-// position, the session in progress, the unit and the plan form in `meta`.
+// State: finished sessions in the `workouts` store, the owner's own exercises
+// (from an imported history) in `exercises`; the plan, the rotation position,
+// the session in progress, the unit and the plan form in `meta`.
 import * as db from "./db.js";
 import * as L from "./workouts.js";
 import { esc, int, announce } from "./ui.js";
@@ -23,11 +24,12 @@ let lastSaved = null;  // summary card after finishing a session
 let note = null;       // { text, tone } for the Plan tab's status line, shown once
 
 async function load() {
-  const [plan, next, draft, unit, form, focus, liftlog, sessions] = await Promise.all([
+  const [plan, next, draft, unit, form, focus, liftlog, sessions, exercises] = await Promise.all([
     db.getMeta(META.plan, null), db.getMeta(META.next, 0), db.getMeta(META.draft, null), db.getMeta(META.unit, "kg"),
-    db.getMeta(META.form, null), db.getMeta(META.focus, null), db.getMeta(META.liftlog, null), db.getAll("workouts"),
+    db.getMeta(META.form, null), db.getMeta(META.focus, null), db.getMeta(META.liftlog, null), db.getAll("workouts"), db.getAll("exercises"),
   ]);
-  S = { plan, next, draft, unit: L.UNITS.includes(unit) ? unit : "kg", form: { ...DEFAULT_FORM, ...(form || {}) }, focus, liftlog, sessions };
+  const names = Object.fromEntries(exercises.map((e) => [e.id, e.name]));
+  S = { plan, next, draft, unit: L.UNITS.includes(unit) ? unit : "kg", form: { ...DEFAULT_FORM, ...(form || {}) }, focus, liftlog, sessions, names };
   return S;
 }
 
@@ -38,7 +40,7 @@ const fmtW = (kg, ex) => L.fmtWeight(kg, S.unit, ex);
 const fmtBig = (kg) => { const v = disp(kg); return v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : v >= 1e4 ? Math.round(v / 1e3) + "k" : int(v); };
 const date = (d) => new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 const dur = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
-const exName = (id) => (L.BY_ID[id] ? L.BY_ID[id].name : id);
+const exName = (id) => L.exLabel(id, S.names);
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 function toggles(act, value, opts, label, extra = "") {
@@ -98,6 +100,25 @@ async function importLiftlog(d) {
   return `Brought over ${plural(fresh.length, "session")}${tookPlan ? " and your plan" : ""}.`;
 }
 
+// A workout history file: adds the sessions genki does not have yet (by id, so
+// importing the same file twice adds nothing) and the exercises they use.
+// Shows weights in the file's unit when the app is still on kg.
+async function importHistory(d) {
+  const fresh = L.newSessions(S.sessions, d.sessions);
+  const used = new Set(fresh.flatMap((s) => s.sets.map((x) => x.exId)));
+  const exercises = d.exercises.filter((e) => used.has(e.id) && S.names[e.id] !== e.name);
+  if (exercises.length) await db.putMany("exercises", exercises);
+  if (fresh.length) await db.putMany("workouts", fresh);
+  const sets = fresh.reduce((a, s) => a + s.sets.length, 0);
+  const had = d.sessions.length - fresh.length;
+  let text = `Added ${plural(fresh.length, "session")} (${plural(sets, "set")})${had ? `; ${plural(had, "session")} ${had === 1 ? "was" : "were"} already here` : ""}.`;
+  if (fresh.length && d.unit === "lb" && S.unit !== "lb") { await db.setMeta(META.unit, "lb"); text += " Weights now show in pounds, as in your log (change it under Weight unit)."; }
+  return text;
+}
+
+// Reps text that is typed but does not read as rep notation.
+const repsBad = (v) => v !== "" && v != null && !L.parseReps(v);
+
 // ---------- Train ----------
 
 function viewTrain() {
@@ -139,7 +160,7 @@ function entryCard(e, ei) {
       ${alts.length > 1 ? `<label class="lift-swap"><span class="visually-hidden">Swap exercise</span><select data-swap="${ei}">${alts.map((a) => `<option value="${a.id}" ${a.id === e.exId ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></label>` : ""}
     </div>
     <div class="lift-tip">
-      ${last ? `<span><strong>Last (${esc(date(last.date))}):</strong> ${last.sets.map((x) => `${ex.inc || x.w ? fmtW(x.w, ex) + "×" : ""}${esc(x.reps)}`).join(", ")}</span>` : ""}
+      ${last ? `<span><strong>Last (${esc(date(last.date))}):</strong> ${last.sets.map((x) => esc(L.fmtSet(x, u(), ex))).join(", ")}</span>` : ""}
       <span><strong>Try:</strong> ${sug.w != null && ex.inc ? `${fmtW(sug.w, ex)} ${u()} × ${esc(sug.reps)}` : `${esc(sug.reps)} reps`}. ${esc(sug.why)}</span>
     </div>
     <div class="lift-sets">
@@ -147,11 +168,12 @@ function entryCard(e, ei) {
       ${e.sets.map((x, si) => `<div class="lift-set${x.done ? " done" : ""}" data-set="${si}">
         <span class="n">${si + 1}</span>
         <input inputmode="decimal" aria-label="Set ${si + 1} weight (${u()})" data-f="w" value="${esc(x.w)}" placeholder="${sug.w != null ? fmtW(sug.w, ex) : "0"}">
-        <input inputmode="numeric" aria-label="Set ${si + 1} reps" data-f="reps" value="${esc(x.reps)}" placeholder="${esc(sug.reps)}">
+        <input inputmode="text" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Set ${si + 1} reps" aria-describedby="lift-notation-${ei}" data-f="reps" value="${esc(x.reps)}" placeholder="${esc(sug.reps)}"${repsBad(x.reps) ? ' aria-invalid="true"' : ""}>
         <input inputmode="numeric" aria-label="Set ${si + 1} reps in reserve" data-f="rir" value="${esc(x.rir)}" placeholder="${slot.rir}">
         <button type="button" class="lift-check" data-act="lift-done" aria-label="Set ${si + 1} done" aria-pressed="${!!x.done}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
       </div>`).join("")}
     </div>
+    <p class="hint lift-notation" id="lift-notation-${ei}">Reps: 7.4 is 7 and 0.4 of the next · H hard (7.4H) · +1 extra · R or L one side (10R:7L each side) · d before a drop set (d6).</p>
     <div class="lift-row">
       <button type="button" class="link-btn" data-act="lift-add-set">+ Add set</button>
       ${e.sets.length > 1 ? `<button type="button" class="link-btn muted" data-act="lift-remove-set">Remove last set</button>` : ""}
@@ -185,9 +207,13 @@ function viewProgress() {
   const delta = lastW ? Math.round(((thisW - lastW) / lastW) * 100) : null;
   const prs = L.records(ss);
   const pr28 = prs.filter((p) => now - new Date(p.date) < 28 * DAY);
-  const exIds = [...new Set(ss.flatMap((s) => s.sets.map((x) => x.exId)))]
-    .filter((id) => L.BY_ID[id] && L.BY_ID[id].inc)
-    .sort((a, b) => (L.BY_ID[b].c - L.BY_ID[a].c) || (L.history(ss, b).length - L.history(ss, a).length));
+  // Weighted exercises: library ones that add load, and the owner's own ones logged with a weight.
+  const weighted = new Set(ss.flatMap((s) => s.sets.filter((x) => x.w > 0 && !x.bw).map((x) => x.exId)));
+  const count = {};
+  for (const s of ss) for (const id of new Set(s.sets.map((x) => x.exId))) count[id] = (count[id] || 0) + 1;
+  const exIds = Object.keys(count)
+    .filter((id) => (L.BY_ID[id] ? L.BY_ID[id].inc : weighted.has(id)))
+    .sort((a, b) => ((L.BY_ID[b]?.c || 0) - (L.BY_ID[a]?.c || 0)) || (count[b] - count[a]));
   const focus = exIds.includes(S.focus) ? S.focus : exIds[0];
   return `
     <div class="card lift-kpis">
@@ -200,7 +226,7 @@ function viewProgress() {
     <h3>Strength trend</h3>
     <div class="card">
       <p class="hint lift-note">Best estimated one-rep max per session, with a straight-line trend.</p>
-      ${exIds.length ? `<label class="field"><span>Exercise</span><select data-focus>${exIds.map((id) => `<option value="${id}" ${id === focus ? "selected" : ""}>${esc(exName(id))}</option>`).join("")}</select></label>${trendChart(focus)}` : `<p class="muted small">Log a weighted exercise to see a trend.</p>`}
+      ${exIds.length ? `<label class="field"><span>Exercise</span><select data-focus>${exIds.map((id) => `<option value="${esc(id)}" ${id === focus ? "selected" : ""}>${esc(exName(id))}</option>`).join("")}</select></label>${trendChart(focus)}` : `<p class="muted small">Log a weighted exercise to see a trend.</p>`}
     </div>
 
     <h3>Recent PRs</h3>
@@ -267,8 +293,8 @@ function muscleChart(vals, ticks) {
 
 function trendChart(id) {
   const pts = L.history(S.sessions, id);
-  const ex = L.BY_ID[id];
-  if (pts.length < 2) return `<p class="muted small">Two sessions of ${esc(ex.name)} are needed for a trend.</p>`;
+  const name = exName(id);
+  if (pts.length < 2) return `<p class="muted small">Two sessions of ${esc(name)} are needed for a trend.</p>`;
   const H = 170, Lm = 34, R = 10, T = 10, B = 22;
   const t0 = new Date(pts[0].date).getTime(), t1 = new Date(pts[pts.length - 1].date).getTime();
   const vals = pts.map((p) => disp(p.best));
@@ -283,7 +309,7 @@ function trendChart(id) {
   const ticks = [0, 0.5, 1].map((k) => lo + k * (hi - lo));
   const best = pts.reduce((a, p) => (p.best > a.best ? p : a), pts[0]);
   const latest = pts[pts.length - 1];
-  return `<figure class="chart"><svg viewBox="0 0 ${CW} ${H}" role="img" aria-label="${esc(`Estimated one-rep max for ${ex.name}: ${pts.length} sessions from ${date(t0)} to ${date(t1)}, latest ${fmtW(latest.best)} ${u()}, best ${fmtW(best.best)} ${u()}.`)}">
+  return `<figure class="chart"><svg viewBox="0 0 ${CW} ${H}" role="img" aria-label="${esc(`Estimated one-rep max for ${name}: ${pts.length} sessions from ${date(t0)} to ${date(t1)}, latest ${fmtW(latest.best)} ${u()}, best ${fmtW(best.best)} ${u()}.`)}">
       ${ticks.map((v) => `<line class="grid" x1="${Lm}" x2="${CW - R}" y1="${f(y(v))}" y2="${f(y(v))}"/><text class="tick" x="${Lm - 6}" y="${f(y(v) + 4)}" text-anchor="end">${Math.round(v)}</text>`).join("")}
       <text class="tick" x="${Lm}" y="${H - 6}">${esc(date(t0))}</text>
       <text class="tick" x="${CW - R}" y="${H - 6}" text-anchor="end">${esc(date(t1))}</text>
@@ -373,10 +399,12 @@ function viewPlan() {
       <div class="foot-actions tight">
         <button type="button" class="btn ghost" data-act="lift-csv" ${n ? "" : "disabled"}>Export CSV</button>
         <button type="button" class="btn ghost" data-act="lift-liftlog-file">Import Liftlog file</button>
+        <button type="button" class="btn ghost" data-act="lift-history-file">Import workout history</button>
       </div>
-      <p class="hint">${plural(n, "session")} logged. The CSV has one row per set; workouts are also in the full backup (top right). A Liftlog backup file adds the sessions genki does not have yet.</p>
+      <p class="hint">${plural(n, "session")} logged. The CSV has one row per set; workouts are also in the full backup (top right). A Liftlog backup file or a workout history file (made from your old log on your computer) adds the sessions genki does not have yet.</p>
       <p class="msg ${note ? note.tone : ""}" id="lift-msg" role="status">${note ? esc(note.text) : ""}</p>
       <input type="file" id="lift-file" accept="application/json,.json" hidden>
+      <input type="file" id="lift-history" accept="application/json,.json" hidden>
     </div>`;
 }
 
@@ -509,7 +537,8 @@ export async function handleLiftClick(act, el) {
     case "lift-start": await start(+el.dataset.day); break;
     case "lift-done": {
       const si = +el.closest("[data-set]").dataset.set, x = e.sets[si];
-      if (!x.done && !(parseInt(x.reps, 10) > 0)) {
+      if (!x.done && repsBad(x.reps)) { el.closest("[data-set]").querySelector('[data-f="reps"]').focus(); break; }
+      if (!x.done && !L.parseReps(x.reps)) {
         // Tapping done on an empty row logs the suggested numbers shown as placeholders.
         // A weighted exercise with no suggestion yet (first time) needs a typed weight.
         const row = el.closest("[data-set]");
@@ -536,10 +565,11 @@ export async function handleLiftClick(act, el) {
       if (s && confirm(`Delete ${s.day} on ${date(s.date)}? This cannot be undone.`)) { await db.del("workouts", s.id); rerender(); }
       break;
     }
-    case "lift-csv": download(`genki-workouts-${new Date().toISOString().slice(0, 10)}.csv`, L.toCSV(S.sessions, S.unit), "text/csv"); break;
+    case "lift-csv": download(`genki-workouts-${new Date().toISOString().slice(0, 10)}.csv`, L.toCSV(S.sessions, S.unit, S.names), "text/csv"); break;
     case "lift-liftlog": { const d = liftlogData(); if (d) { await importLiftlog(d); sub = S.plan ? sub : "train"; rerender(); } break; }
     case "lift-liftlog-no": await db.setMeta(META.liftlog, "dismissed"); rerender(); break;
     case "lift-liftlog-file": document.getElementById("lift-file")?.click(); break;
+    case "lift-history-file": document.getElementById("lift-history")?.click(); break;
   }
 }
 
@@ -552,9 +582,10 @@ export async function handleLiftInput(ev) {
     // A comma-decimal keyboard types "72,5": read the comma as the decimal point, keep the first one only.
     const clean = t.dataset.f === "w"
       ? t.value.replace(/,/g, ".").replace(/[^0-9.]/g, "").replace(/^([^.]*\.)(.*)$/, (_, a, b) => a + b.replace(/\./g, ""))
-      : t.value.replace(/[^0-9]/g, "");
+      : t.dataset.f === "reps" ? t.value.replace(/,/g, ".").replace(/[^0-9.+:dDhHlLrR ]/g, "") : t.value.replace(/[^0-9]/g, "");
     if (clean !== t.value) t.value = clean;
     e.sets[+t.closest("[data-set]").dataset.set][t.dataset.f] = clean;
+    if (t.dataset.f === "reps") { if (repsBad(clean)) t.setAttribute("aria-invalid", "true"); else t.removeAttribute("aria-invalid"); }
     await saveDraft();
     return;
   }
@@ -575,6 +606,14 @@ export async function handleLiftInput(ev) {
     const d = L.fromLiftlog(await file.text());
     if (!d) { msg("That file is not a Liftlog backup.", "bad"); return; }
     note = { text: await importLiftlog(d), tone: "good" };
+    rerender();
+  } else if (t.id === "lift-history" && t.files[0]) {
+    const file = t.files[0];
+    t.value = "";
+    const d = L.fromHistoryFile(await file.text());
+    if (!d) { msg("That file is not a genki workout history file.", "bad"); return; }
+    if (!d.sessions.length) { msg("That file has no sessions with sets in it.", "bad"); return; }
+    note = { text: await importHistory(d), tone: "good" };
     rerender();
   }
 }

@@ -10,3 +10,8 @@ exports/
 *.genki.json
 .claude/*
 !.claude/test-manifest.json
+# workout history converter files (personal data)
+genki-workout-history.json
+aliases*.json
+workouts.json
+sets.csv

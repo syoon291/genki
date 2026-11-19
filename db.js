@@ -4,10 +4,10 @@
 import { TOMBSTONES, tombstoneId, withTombstones } from "./merge.js";
 
 export const DB_NAME = "genki";
-export const DB_VERSION = 8;
+export const DB_VERSION = 9;
 
 // The keyPath of each store, so a backup can be checked before it replaces anything.
-export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id", weighIns: "date", workouts: "id", nutritionWeeks: "weekStart", [TOMBSTONES]: "id", myMeals: "id", days: "date", fasts: "id" };
+export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id", weighIns: "date", workouts: "id", nutritionWeeks: "weekStart", [TOMBSTONES]: "id", myMeals: "id", days: "date", fasts: "id", exercises: "id" };
 
 // UPGRADES[n] moves a database from version n to n+1.
 const UPGRADES = [
@@ -26,7 +26,7 @@ const UPGRADES = [
     db.createObjectStore("weighIns", { keyPath: KEY_PATHS.weighIns });
   },
   (db) => {
-    // Finished workout sessions: { id, date (ISO time), day, sets: [{ exId, w (kg), reps, rir }], minutes }.
+    // Finished workout sessions: { id, date (ISO time), day, sets: [{ exId, w (kg), reps, rir }], minutes } (set fields added in version 9).
     db.createObjectStore("workouts", { keyPath: KEY_PATHS.workouts });
   },
   (db) => {
@@ -50,6 +50,13 @@ const UPGRADES = [
     // while running), goalHours }. New stores only: no existing record changes.
     db.createObjectStore("days", { keyPath: KEY_PATHS.days });
     db.createObjectStore("fasts", { keyPath: KEY_PATHS.fasts });
+  },
+  (db) => {
+    // The owner's own exercises, from an imported workout history: { id: "x-<slug>", name }.
+    // Sets name them by id like library exercises. Version 9 also lets a set carry
+    // rep notation (fractional reps, hard, extra, one side, drop, bodyweight):
+    // added optional fields, so existing sessions need no change.
+    db.createObjectStore("exercises", { keyPath: KEY_PATHS.exercises });
   },
 ];
 
