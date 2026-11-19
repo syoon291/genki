@@ -76,6 +76,10 @@ export const EX = [
 ];
 export const BY_ID = Object.fromEntries(EX.map((e) => [e.id, e]));
 
+// An exercise's name: the library's, else one of the owner's own exercises
+// (the `exercises` store, brought in with an imported history: { id: name }).
+export const exLabel = (id, names = {}) => BY_ID[id]?.name ?? names[id] ?? id;
+
 // A gym has dumbbells and a floor; a dumbbell setup has a floor.
 const ALLOWED = { gym: ["gym", "db", "bw"], db: ["db", "bw"], bw: ["bw"] };
 
@@ -205,7 +209,8 @@ export function suggest(exId, slot, sessions) {
   }
   if (below > work.length / 2 && ex.inc) return { w: round(w * 0.9, ex.inc), reps: slot.lo, why: "Missed the range on most sets: drop about 10% and build back." };
   const bestReps = Math.max(...work.map((x) => x.reps));
-  return { w, reps: Math.min(slot.hi, bestReps + 1), why: "Same weight: beat last time by a rep on at least one set." };
+  // 7.4 last time: aim for 8 (a whole rep), not 8.4.
+  return { w, reps: Math.min(slot.hi, Math.floor(bestReps) + 1), why: "Same weight: beat last time by a rep on at least one set." };
 }
 const round = (v, step) => step ? Math.max(step, Math.round(v / step) * step) : v;
 
@@ -235,7 +240,7 @@ export function weeklyTonnage(sessions, weeks, now = Date.now()) {
       const t = new Date(s.date).getTime();
       if (t < from || t >= to) continue;
       n++;
-      for (const x of s.sets) { kg += (x.w || 0) * (x.reps || 0); sets++; }
+      for (const x of s.sets) { kg += setLoad(x); sets++; }
     }
     out.push({ from, kg, sets, sessions: n });
   }
@@ -255,16 +260,18 @@ export function records(sessions) {
   return prs.sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
-export function toCSV(sessions, unit) {
+export function toCSV(sessions, unit, names = {}) {
   const f = unit === "lb" ? 2.20462 : 1;
   const q = (v) => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
-  const rows = [["date", "session", "exercise", "pattern", "set", `weight_${unit}`, "reps", "rir", `e1rm_${unit}`, "primary_muscles"]];
+  // Text a spreadsheet would run as a formula (=, +, -, @ first) is kept as text.
+  const txt = (v) => /^[=+\-@\t\r]/.test(String(v)) ? `'${v}` : v;
+  const rows = [["date", "session", "exercise", "pattern", "set", `weight_${unit}`, "reps", "rir", `e1rm_${unit}`, "primary_muscles", "notation"]];
   for (const s of [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date))) {
     const count = {};
     for (const x of s.sets) {
-      const ex = BY_ID[x.exId] || { name: x.exId, p: "", pri: [] };
+      const ex = BY_ID[x.exId] || { name: exLabel(x.exId, names), p: "", pri: [] };
       count[x.exId] = (count[x.exId] || 0) + 1;
-      rows.push([s.date.slice(0, 10), s.day, ex.name, ex.p, count[x.exId], +(x.w * f).toFixed(1), x.reps, x.rir ?? "", +(e1rm(x.w, x.reps, x.rir) * f).toFixed(1), ex.pri.join("|")]);
+      rows.push([s.date.slice(0, 10), txt(s.day), txt(ex.name), ex.p, count[x.exId], +(x.w * f).toFixed(1), x.reps, x.rir ?? "", +(e1rm(x.w, x.reps, x.rir) * f).toFixed(1), ex.pri.join("|"), formatReps(x)]);
     }
   }
   return rows.map((r) => r.map(q).join(",")).join("\n") + "\n";
@@ -290,7 +297,9 @@ export const toKg = (v, unit = "kg") => (unit === "lb" ? v / LB_PER_KG : v);
 export const estMinutes = (day) => day.slots.reduce((a, s) => a + (s.sets * (s.rest + 40)) / 60, 0) + 5;
 
 // Load moved in a session: weight x reps over every set (kg).
-export const sessionVolume = (session) => session.sets.reduce((a, x) => a + (x.w || 0) * (x.reps || 0), 0);
+// Extra reps (the "+1" of "7+1H") count as load moved, not toward the 1RM.
+export const setLoad = (x) => (x.w || 0) * ((x.reps || 0) + (x.extra || 0));
+export const sessionVolume = (session) => session.sets.reduce((a, x) => a + setLoad(x), 0);
 
 // A new in-progress session for plan day `i`: one row per planned set, the
 // weight pre-filled from the progression suggestion (as text in `unit`).
@@ -306,16 +315,24 @@ export function prefill(exId, slot, sessions, unit = "kg") {
   return sug.w != null && ex && ex.inc ? fmtWeight(sug.w, unit, ex) : "";
 }
 
-// The sets worth saving from a draft: rows with reps above 0. Weights typed in
-// `unit` become kg (2 decimals); a blank RIR takes the slot's target.
+// The sets worth saving from a draft: rows whose reps parse (rep notation,
+// below) to more than 0. Weights typed in `unit` become kg (3 decimals, so a
+// pound weight reads back exactly); a blank RIR takes the slot's target, or 0
+// on a set marked hard. A drop set needs a set before it.
 export function collectSets(draft, unit = "kg") {
   const sets = [];
-  for (const e of draft.entries) for (const x of e.sets) {
-    const reps = parseInt(x.reps, 10);
-    if (!(reps > 0)) continue;
-    const w = parseFloat(x.w);
-    const rir = x.rir === "" || x.rir == null ? e.slot.rir : parseInt(x.rir, 10);
-    sets.push({ exId: e.exId, w: Number.isFinite(w) && w > 0 ? +toKg(w, unit).toFixed(2) : 0, reps, rir: Number.isFinite(rir) ? rir : null });
+  for (const e of draft.entries) {
+    let first = true;
+    for (const x of e.sets) {
+      const p = parseReps(x.reps);
+      if (!p) continue;
+      const w = parseFloat(x.w);
+      const rir = x.rir === "" || x.rir == null ? (p.hard ? 0 : e.slot.rir) : parseInt(x.rir, 10);
+      const { reps, ...flags } = p;
+      if (first) delete flags.drop;
+      first = false;
+      sets.push({ exId: e.exId, w: Number.isFinite(w) && w > 0 ? +toKg(w, unit).toFixed(3) : 0, reps, rir: Number.isFinite(rir) ? rir : null, ...flags });
+    }
   }
   return sets;
 }
@@ -378,7 +395,10 @@ export function newSessions(existing, incoming) {
 // session is saved. w and reps are the typed text of the set row.
 export function setMessage({ name, n, of, done, w, reps, unit, rest }) {
   if (!done) return `${name} set ${n} of ${of} marked not done.`;
-  const load = parseFloat(w) > 0 ? `${w} ${unit} × ${reps}` : `${reps} reps`;
+  // Plain reps read as before ("40 kg × 8"); notation is spelled out ("7.4 reps, hard").
+  const p = parseReps(reps);
+  const plain = !p || Object.keys(p).length === 1;
+  const load = parseFloat(w) > 0 ? `${w} ${unit} × ${plain ? reps : spokenReps(p)}` : plain ? `${reps} reps` : spokenReps(p);
   const r = rest > 0 ? ` Rest ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")}.` : "";
   return `${name} set ${n} of ${of} done: ${load}.${r}`;
 }
@@ -386,4 +406,175 @@ export function setMessage({ name, n, of, done, w, reps, unit, rest }) {
 export function sessionSavedMessage(session, prs) {
   const sets = session.sets.length;
   return `Session saved: ${session.day}, ${sets} ${sets === 1 ? "set" : "sets"}, ${prs.length} new ${prs.length === 1 ? "PR" : "PRs"}.`;
+}
+
+// ---------- rep notation ----------
+// How the owner writes a set's reps, read the same way in the app and in an
+// imported history:
+//   7.4     7 reps and 0.4 of the 8th (12.55: 12 and 0.55 of the 13th)
+//   7.7H    H: a hard set, stopped near failure
+//   7+1H    +1: extra reps after the set (assisted, cheat or rest-pause)
+//   7R, 7L  one side only (RH, LH: right or left hand, the same thing)
+//   10R:7L  each side logged on its own
+//   d6      a drop set: lighter weight straight after the set before
+// H always means hard except straight after R or L ("7RH" is the right hand;
+// a hard right-hand set is "7HR" or "7RHH").
+// parseReps(text) -> { reps, extra?, hard?, side?, repsL?, repsR?, drop?, note? }
+// or null. Strict (the default) refuses any other text; { lenient: true } keeps
+// it as the note (for old logs like "8 slow warm").
+const n2 = (v) => +(+v).toFixed(2);
+
+function oneSide(s) {
+  const m = s.match(/^(\d+(?:\.\d*)?|\.\d+)/);
+  if (!m) return null;
+  const out = { reps: n2(m[1]) };
+  let rest = s.slice(m[0].length);
+  for (;;) {
+    let t;
+    if ((t = rest.match(/^\s*\+\s*(\d+(?:\.\d+)?)/))) out.extra = n2((out.extra || 0) + +t[1]);
+    else if ((t = rest.match(/^\s*(right|left)\b/i))) out.side = t[1][0].toUpperCase();
+    else if ((t = rest.match(/^\s*([rl])hh(?![a-z])/i))) { out.side = t[1].toUpperCase(); out.hard = true; }
+    else if ((t = rest.match(/^\s*([rl])h(?![a-z])/i)) || (t = rest.match(/^\s*([rl])(?![a-z])/i))) out.side = t[1].toUpperCase();
+    else if ((t = rest.match(/^\s*h(?=[^a-z]|$|[rl](?![a-z])|[rl]h(?![a-z]))/i))) out.hard = true;
+    else break;
+    rest = rest.slice(t[0].length);
+  }
+  out.rest = rest.trim();
+  return out;
+}
+
+export function parseReps(text, { lenient = false } = {}) {
+  let s = String(text ?? "").replace(/,/g, ".").trim();
+  if (!s) return null;
+  const notes = [];
+  let hard = false;
+  s = s.replace(/\(([^)]*)\)/g, (_, inner) => { const t = inner.trim(); if (/^h$/i.test(t)) hard = true; else if (t) notes.push(t); return " "; }).trim();
+  const dm = s.match(/^(?:drop|d)\s*(?=[\d.])/i);
+  if (dm) s = s.slice(dm[0].length);
+  const parts = s.split(/\s*:\s*/);
+  let out;
+  if (parts.length === 2) {
+    const a = oneSide(parts[0]), b = oneSide(parts[1]);
+    if (!a || !b) return null;
+    if (a.rest) notes.push(a.rest);
+    if (b.rest) notes.push(b.rest);
+    // A side without a letter is the other one: "10L: 8H" is 8 on the right.
+    const sa = a.side || (b.side === "L" ? "R" : "L"), sb = b.side || (sa === "L" ? "R" : "L");
+    if (sa === sb) return null;
+    const L = sa === "L" ? a : b, R = sa === "L" ? b : a;
+    out = { reps: Math.min(L.reps, R.reps), repsL: L.reps, repsR: R.reps };
+    const extra = (a.extra || 0) + (b.extra || 0);
+    if (extra) out.extra = n2(extra);
+    if (a.hard || b.hard) hard = true;
+  } else if (parts.length === 1) {
+    const a = oneSide(s);
+    if (!a) return null;
+    if (a.rest) notes.push(a.rest);
+    out = { reps: a.reps };
+    if (a.extra) out.extra = a.extra;
+    if (a.side) out.side = a.side;
+    if (a.hard) hard = true;
+  } else return null;
+  if (!(out.reps > 0) || out.reps >= 1000) return null;
+  if (notes.length && !lenient) return null;
+  if (hard) out.hard = true;
+  if (dm) out.drop = true;
+  if (notes.length) out.note = notes.join("; ").slice(0, 200);
+  return out;
+}
+
+// A set's reps written back in the notation (parseReps reads it again).
+export function formatReps(x) {
+  const h = x.hard ? "H" : "";
+  const plus = x.extra ? `+${n2(x.extra)}` : "";
+  const body = x.repsL != null && x.repsR != null
+    ? `${n2(x.repsR)}${h}R:${n2(x.repsL)}${h}L${plus}`
+    : `${n2(x.reps)}${plus}${h}${x.side || ""}`;
+  return (x.drop ? "d" : "") + body;
+}
+
+// The same, as a screen reader should say it.
+export function spokenReps(x) {
+  const r = (v) => `${n2(v)} ${n2(v) === 1 ? "rep" : "reps"}`;
+  const parts = [x.repsL != null && x.repsR != null ? `${r(x.repsR)} right, ${r(x.repsL)} left` : r(x.reps)];
+  if (x.extra) parts.push(`plus ${n2(x.extra)} extra`);
+  if (x.side) parts.push(x.side === "R" ? "right side" : "left side");
+  if (x.hard) parts.push("hard");
+  if (x.drop) parts.push("drop set");
+  return parts.join(", ");
+}
+
+// A weight as logged, to 0.1 of the unit (45 lb stays 45, not the nearest plate step).
+export function fmtLoad(kg, unit = "kg") {
+  const v = unit === "lb" ? (kg || 0) * LB_PER_KG : kg || 0;
+  return String(+v.toFixed(1));
+}
+
+// One logged set for a list: "45×7.4H", "BW×10", "BW+10×8", "d35×6".
+export function fmtSet(x, unit = "kg", ex = null) {
+  const reps = formatReps({ ...x, drop: false });
+  const d = x.drop ? "d" : "";
+  if (x.bw) return `${d}BW${x.w ? "+" + fmtLoad(x.w, unit) : ""}×${reps}`;
+  if (!x.w && ex && !ex.inc) return d + reps;
+  return `${d}${fmtLoad(x.w, unit)}×${reps}`;
+}
+
+// ---------- workout history import ----------
+// The owner's older training log, turned into a genki file on the owner's own
+// computer by scripts/workout-history.mjs (it never enters this repo) and
+// picked in the app like the Liftlog file:
+// { genki: "workout-history", v: 1, unit: "lb"|"kg",
+//   exercises: [{ id: "x-<slug>", name }],
+//   sessions: [{ id: "h-...", date: "YYYY-MM-DD", day, note?, sets: [set] }] }
+// Every field is rebuilt and checked: the view prints names into the page.
+export const HISTORY_KIND = "workout-history";
+const okNum = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+export function cleanSet(x, known) {
+  if (!x || typeof x !== "object" || typeof x.exId !== "string" || !known.has(x.exId)) return null;
+  if (!okNum(x.reps, 0.01, 999.99)) return null;
+  const out = { exId: x.exId, w: okNum(x.w, 0, 2000) ? +x.w.toFixed(3) : 0, reps: n2(x.reps), rir: Number.isInteger(x.rir) && x.rir >= 0 && x.rir <= 10 ? x.rir : null };
+  if (okNum(x.extra, 0.01, 100)) out.extra = n2(x.extra);
+  if (x.hard === true) out.hard = true;
+  if (x.drop === true) out.drop = true;
+  if (x.side === "L" || x.side === "R") out.side = x.side;
+  if (okNum(x.repsL, 0, 999) && okNum(x.repsR, 0, 999)) { out.repsL = n2(x.repsL); out.repsR = n2(x.repsR); }
+  if (x.bw === true) out.bw = true;
+  const note = str(x.note, 200);
+  if (note) out.note = note;
+  return out;
+}
+
+// File text -> { unit, exercises, sessions } or null when it is not a history file.
+// A session's date becomes local noon that day, so it lands on the right day anywhere.
+export function fromHistoryFile(raw) {
+  let d = raw;
+  if (typeof raw === "string") { try { d = JSON.parse(raw); } catch { return null; } }
+  if (!d || typeof d !== "object" || d.genki !== HISTORY_KIND || d.v !== 1 || !Array.isArray(d.sessions) || !Array.isArray(d.exercises)) return null;
+  const exercises = [];
+  const known = new Set(Object.keys(BY_ID));
+  for (const e of d.exercises) {
+    if (!e || typeof e.id !== "string" || !/^x-[a-z0-9-]{1,60}$/.test(e.id) || known.has(e.id)) continue;
+    const name = str(e.name, 80);
+    if (!name) continue;
+    exercises.push({ id: e.id, name });
+    known.add(e.id);
+  }
+  const sessions = [], ids = new Set();
+  for (const s of d.sessions) {
+    if (!s || typeof s !== "object" || typeof s.id !== "string" || !/^h-[A-Za-z0-9-]{1,60}$/.test(s.id) || ids.has(s.id)) continue;
+    const m = typeof s.date === "string" && s.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m || +m[1] < 1900) continue;
+    const day = new Date(+m[1], +m[2] - 1, +m[3], 12);
+    if (day.getMonth() !== +m[2] - 1) continue;
+    const sets = (Array.isArray(s.sets) ? s.sets : []).map((x) => cleanSet(x, known)).filter(Boolean);
+    // A drop set continues the set before it of the same exercise.
+    sets.forEach((x, i) => { if (x.drop && sets[i - 1]?.exId !== x.exId) delete x.drop; });
+    if (!sets.length) continue;
+    const note = str(s.note, 2000);
+    ids.add(s.id);
+    sessions.push({ id: s.id, date: day.toISOString(), day: str(s.day, 80) || "Session", sets, ...(note ? { note } : {}), source: "history" });
+  }
+  return { unit: UNITS.includes(d.unit) ? d.unit : "kg", exercises, sessions };
 }

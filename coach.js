@@ -6,7 +6,7 @@
 import { dayKey, shiftDay, weekDays, sumEntries, kgToLb } from "./nutrition.js";
 import { itemsTotal } from "./foods.js";
 import { sortWeighIns, averageEnding } from "./weight.js";
-import { records, BY_ID } from "./workouts.js";
+import { records, exLabel } from "./workouts.js";
 import { fastHistory, fastStatus, waterGoalOf } from "./trackers.js";
 
 const n0 = (v) => Math.round(v).toLocaleString("en-US");
@@ -114,13 +114,13 @@ export function weekCompareLines(c) {
 // water and logging days. { kind, text } or null when nothing stands out yet.
 // goalKg/weightKg come from the profile (the direction of the goal); sessions
 // are finished workouts, days the day-tracker records.
-export function biggestWin({ entries = [], weighIns = [], sessions = [], fasts = [], days = [], t = null, goalKg = null, weightKg = null, waterGoal = null, today = dayKey() }) {
+export function biggestWin({ entries = [], weighIns = [], sessions = [], exNames = {}, fasts = [], days = [], t = null, goalKg = null, weightKg = null, waterGoal = null, today = dayKey() }) {
   const { thisWeek } = weekWindow(today);
   const inWeek = new Set(thisWeek);
   const wins = [];
   const prs = records(sessions).filter((p) => inWeek.has(dayKey(new Date(p.date))));
   if (prs.length) {
-    const names = [...new Set(prs.map((p) => BY_ID[p.exId]?.name ?? p.exId))];
+    const names = [...new Set(prs.map((p) => exLabel(p.exId, exNames)))];
     wins.push({ kind: "records", score: 100 + prs.length, text: prs.length === 1 ? `A new lift record on ${names[0]}.` : `${prs.length} new lift records, including ${names[0]}.` });
   }
   const c = weekCompare(entries, weighIns, today);

@@ -32,7 +32,7 @@ One sentence on today's calories and protein against the targets (`todayCoach`),
 
 Monday to today, over logged days only (days with at least one entry), as on the Progress tab.
 
-- **Biggest win** (`biggestWin`), in a soft accent box: the strongest of a new lift record (from `records()` in `workouts.js`), the 7-day weight average moving 0.2 kg or more toward the profile's goal since a week ago, protein target days (3 or more), calorie days within the target (at or under it and at least 70 % of it; 3 or more), workouts done (2 or more), fasts finished at their goal (2 or more), water goal days (3 or more), and days with food logged (3 or more). Left out when none applies.
+- **Biggest win** (`biggestWin`), in a soft accent box: the strongest of a new lift record (from `records()` in `workouts.js`; an imported exercise is named from the `exercises` store), the 7-day weight average moving 0.2 kg or more toward the profile's goal since a week ago, protein target days (3 or more), calorie days within the target (at or under it and at least 70 % of it; 3 or more), workouts done (2 or more), fasts finished at their goal (2 or more), water goal days (3 or more), and days with food logged (3 or more). Left out when none applies.
 - **Protein target**: the days it was reached (rounded to the gram) of the logged days, and the daily average against the target. Needs a profile.
 - **Calories** and **Protein**: the daily averages this week, and how much more or less than last week's (all of last week).
 - **Weight**: the 7-day average today against a week ago, in kg with lb.
