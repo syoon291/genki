@@ -158,7 +158,7 @@ async function openLog(date = dayKey(), { fromHistory = false } = {}) {
   const html = `
     <div class="sheet-head">${fromHistory ? backBtn() : ""}<h2 id="panel-title" class="grow">${existing ? "Edit weigh-in" : "Log weight"}</h2>${closeBtn}</div>
     <form class="form" id="weigh-form" novalidate>
-      <div class="grid2">
+      <div class="grid2 weigh-fields">
         <label class="field"><span>Day</span><input name="date" type="date" max="${today}" value="${esc(date)}" required></label>
         <label class="field"><span>Weight (kg)</span><input name="kg" type="number" inputmode="decimal" step="0.1" min="30" max="300" value="${existing ? esc(existing.kg) : ""}" autofocus><small class="hint" id="weigh-lb">${existing ? lb(existing.kg) : ""}</small></label>
       </div>

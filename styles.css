@@ -258,6 +258,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .entry:active, .result:active { background: var(--surface-2); }
 .entry-name { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
 .entry-num { display: flex; flex-direction: column; align-items: flex-end; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.entry-kcal { font-size: 19px; font-weight: 750; line-height: 1.2; color: var(--ink); }
+.entry-kcal .unit { font-size: 13px; font-weight: 600; color: var(--muted); }
 .add-btn { margin-top: 6px; width: 100%; min-height: 44px; border: 1px dashed var(--field-line); border-radius: 14px; background: none; color: var(--accent); font-weight: 650; }
 .foot-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 24px; }
 .foot-actions > :last-child:nth-child(odd) { grid-column: 1 / -1; }
@@ -317,6 +319,9 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
   width: 100%; min-height: 46px; padding: 10px 12px;
   border: 1px solid var(--field-line); border-radius: 12px; background: var(--bg); color: var(--ink);
 }
+.field input[type="date"] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; text-align: left; }
+.field input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+.form .grid2.weigh-fields { column-gap: 20px; row-gap: 14px; }
 .field input:focus, .field select:focus, .search:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 .field.inline { display: flex; align-items: center; gap: 8px; flex: 1; }
 .field.inline select { min-height: 44px; }
