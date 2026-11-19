@@ -27,7 +27,7 @@ The owner pastes a fine-grained GitHub token (repository access: genki-data only
 
 - **Sync now merges** (`mergeSync` in `sync.js`, the merge itself in `merge.js`, unit-tested in `tests/merge.test.mjs`): it fetches `app/latest.json`, checks it with `parseBackup` (a copy this app cannot read, corrupt or from a newer genki, stops the sync with nothing written), merges it with `dumpAll()` record by record, and `PUT`s the merged backup over exactly the version it fetched. If another write landed in between (GitHub answers 409, or 422 for a missing sha), it fetches and merges again, up to three times, so a write from elsewhere is never overwritten unmerged. Then it applies the merged copy on the device (below).
 - A device is **linked** once it has synced or restored (it keeps the file's sha in `syncSha`). An unlinked device that finds a file already there asks before merging into it, showing that copy's date and record count, so a fresh phone never touches the real copy unasked.
-- **Daily sync**: on open, a linked device with a token syncs once per local day (`syncDue`), quietly. A failure is shown in the Sync section ("Last automatic sync failed: ...") and cleared by the next good sync.
+- **Daily sync**: on open, a linked device with a token syncs once per local day (`syncDue`), quietly. A failure is shown in the Sync section ("Last automatic sync failed: ...") and, so it is not missed, as a "Sync failed" notice at the top of the Today tab (`syncErrorNotice` in sync-view.js) with an Open Sync button and a dismiss X. Dismissing sets the device key `syncNoticeHidden`; the next automatic failure clears it, so a new failure shows again. Both are cleared by the next good sync.
 - The commit message is `genki sync <ISO time>`.
 
 ## How the merge decides

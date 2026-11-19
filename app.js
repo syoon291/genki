@@ -8,7 +8,7 @@ import * as db from "./db.js";
 import { buildBackup, backupFileName, parseBackup } from "./backup.js";
 import { recordCount } from "./merge.js";
 import { esc, initPanel, focusKey, restoreFocus } from "./ui.js";
-import { syncSection, handleSyncAct, handleSyncSubmit, setSyncHooks, clearSyncNote, autoSync } from "./sync-view.js";
+import { syncSection, handleSyncAct, handleSyncSubmit, setSyncHooks, clearSyncNote, autoSync, syncErrorNotice, hideSyncNotice } from "./sync-view.js";
 import { nutritionView, todayTiles, handleViewClick, setRerender } from "./nutrition-view.js";
 import { weightCard, handleWeightClick, setWeightRerender, syncProfileWeight } from "./weight-view.js";
 import { detectMfpFile, parseMfpNutrition, parseMfpWeights, parseMfpExercise, planMfpImport, mfpConfirmText, planIsEmpty } from "./mfp.js";
@@ -47,6 +47,7 @@ const RENDER = {
   today: async () => `
     <h2>${greeting()}</h2>
     <p class="sub">${esc(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }))}</p>
+    ${storeError ? "" : await syncErrorNotice()}
     ${storeError ? "" : await todayTiles()}
     <a class="btn ghost log-link" href="#nutrition">Log food</a>
     ${storeError ? "" : await coachCards()}
@@ -98,6 +99,11 @@ view.addEventListener("click", (e) => {
   const el = e.target.closest("[data-act]");
   if (!el || !view.contains(el)) return;
   const act = el.dataset.act;
+  if (act === "sync-notice-open") { openSheet(true).catch((err) => alert(`That did not work: ${err.message}`)); return; }
+  if (act === "sync-notice-hide") {
+    hideSyncNotice().then(() => render(), (err) => alert(`That did not work: ${err.message}`));
+    return;
+  }
   const handler = act.startsWith("lift-") ? handleLiftClick : act.startsWith("w-") ? handleWeightClick : act.startsWith("p-") ? handleProgressClick : act.startsWith("t-") ? handleTrackerClick : act.startsWith("c-") ? handleCoachClick : handleViewClick;
   handler(act, el).catch((err) => alert(`That did not work: ${err.message}`));
 });
@@ -240,13 +246,23 @@ async function importMfp(files) {
   render();
 }
 
-setSyncHooks({ rerender: () => (dialog.open ? renderSheet().catch((e) => console.warn("genki: could not redraw the sheet", e)) : undefined), restored: () => render() });
+// A sync result redraws the sheet when it is open, and the tab (the Today notice).
+setSyncHooks({
+  rerender: () => {
+    render();
+    return dialog.open ? renderSheet().catch((e) => console.warn("genki: could not redraw the sheet", e)) : undefined;
+  },
+  restored: () => render(),
+});
 
-$("#data-btn").addEventListener("click", async () => {
+// The Data & backup sheet; from the Today sync notice it opens at the Sync section.
+async function openSheet(toSync = false) {
   clearSyncNote();
   await renderSheet();
   if (!dialog.open) dialog.showModal();
-});
+  if (toSync) sheet.querySelector("#sync-title")?.scrollIntoView({ block: "start" });
+}
+$("#data-btn").addEventListener("click", () => openSheet());
 
 sheet.addEventListener("click", async (e) => {
   const act = e.target.closest("[data-act]")?.dataset.act;
