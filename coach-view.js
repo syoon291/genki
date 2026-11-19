@@ -23,9 +23,10 @@ async function recentEntries(today) {
 
 export async function coachCards() {
   const today = dayKey();
-  const [profile, entries, weighIns, sessions, fasts, days, waterGoal, myFoods, myMeals] = await Promise.all([
-    db.getMeta("profile", null), recentEntries(today), db.getAll("weighIns"), db.getAll("workouts"), db.getAll("fasts"), db.getAll("days"), db.getMeta("waterGoal", null), db.getAll("myFoods"), db.getAll("myMeals"),
+  const [profile, entries, weighIns, sessions, fasts, days, waterGoal, myFoods, myMeals, exercises] = await Promise.all([
+    db.getMeta("profile", null), recentEntries(today), db.getAll("weighIns"), db.getAll("workouts"), db.getAll("fasts"), db.getAll("days"), db.getMeta("waterGoal", null), db.getAll("myFoods"), db.getAll("myMeals"), db.getAll("exercises"),
   ]);
+  const exNames = Object.fromEntries(exercises.map((e) => [e.id, e.name]));
   const t = targetsOf(profile);
   const eaten = sumEntries(entries.filter((e) => e.date === today));
   const now = todayCoach(eaten, t);
@@ -50,7 +51,7 @@ export async function coachCards() {
     ...(pw ? [{ label: "Protein target", text: proteinWeekText(pw) }] : []),
     ...weekCompareLines(weekCompare(entries, weighIns, today)),
   ];
-  const win = biggestWin({ entries, weighIns, sessions, fasts, days, t, goalKg: profile?.goalKg ?? null, weightKg: profile?.weightKg ?? null, waterGoal, today });
+  const win = biggestWin({ entries, weighIns, sessions, exNames, fasts, days, t, goalKg: profile?.goalKg ?? null, weightKg: profile?.weightKg ?? null, waterGoal, today });
   const weekBody = lines.length || win
     ? `${win ? `<p class="win"><span class="stat-label">Biggest win</span>${esc(win.text)}</p>` : ""}${lines.length ? `<dl class="coach-facts">${lines.map((l) => `<div><dt>${esc(l.label)}</dt><dd>${esc(l.text)}</dd></div>`).join("")}</dl>` : ""}`
     : `<p class="coach-line">Log food for a few days and this card compares the week with the last one.</p>`;

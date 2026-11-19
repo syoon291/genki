@@ -123,7 +123,7 @@ test("newDraft pre-fills the suggested weight; collectSets keeps rows with reps,
   // Typed in lb, stored in kg.
   const lb = L.newDraft(plan, 0, [], "lb", T0);
   lb.entries[0].sets[0] = { w: "135", reps: "5", rir: "", done: true };
-  assert.equal(L.collectSets(lb, "lb")[0].w, +(135 / L.LB_PER_KG).toFixed(2));
+  assert.equal(L.collectSets(lb, "lb")[0].w, +(135 / L.LB_PER_KG).toFixed(3));
 });
 
 test("fromLiftlog reads Liftlog's stored state and drops bad rows", () => {
@@ -160,7 +160,7 @@ test("newSessions skips sessions already brought over", () => {
 test("toCSV writes one row per set in the chosen unit", () => {
   const csv = L.toCSV([sess("a", 0, [set("bench", 100, 5, 2), set("bench", 100, 5, 1)], { day: "Upper, A" })], "kg").trim().split("\n");
   assert.equal(csv.length, 3);
-  assert.equal(csv[1], `2026-01-05,"Upper, A",Bench press,hpush,1,100,5,2,${+(L.e1rm(100, 5, 2)).toFixed(1)},chest`);
+  assert.equal(csv[1], `2026-01-05,"Upper, A",Bench press,hpush,1,100,5,2,${+(L.e1rm(100, 5, 2)).toFixed(1)},chest,5`);
   assert.match(csv[2], /,2,100,5,1,/);
 });
 
