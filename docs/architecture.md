@@ -12,7 +12,7 @@ status: current
 
 genki is a personal nutrition and workout tracker: an installable, offline-capable web app (PWA) built for a phone. It logs food against calorie and protein targets, tracks weigh-ins, and logs workouts against a plan, with one shared on-device store. There is no server, no account and no build step: the repo is the website, served by GitHub Pages. Personal data never enters this public repo; it stays in the browser's IndexedDB, in backup files the owner keeps, and (when the owner turns on sync) in their private repo genki-data.
 
-The product plan and its decisions live in the owner's knowledge hub, not here. Built so far: the app shell (four tabs), the store, JSON backup, nutrition (profile, calorie, protein, carb and fat targets, the food log with search over bundled Japanese and US food tables, recently logged, serving sizes and numbers of servings, adding to several days, the share of today's targets, frequently paired foods, quick add, my foods (with an import file), my meals and recipes, optional fiber, sugar and sodium), weigh-ins (7-day average, progress to goal, a chart, CSV import), and workouts ported from Liftlog (plan templates, set logging pre-filled from last time, a rest timer, PRs, strength trend and volume charts, Liftlog data import), sync to the owner's private GitHub repo (sync now, daily sync, restore on a new phone), a Progress tab (a week's calories, macros, nutrients and weight, foods highest in a macro, a week CSV export), day trackers on the Today tab (fasting with a plan, a live timer, history and a streak; water glasses against a goal; exercise calories and steps with net calories), and coach cards on the Today tab (today against the targets with meal ideas that fit, protein this week, this week against last week, the week's biggest win).
+The product plan and its decisions live in the owner's knowledge hub, not here. Built so far: the app shell (four tabs), the store, JSON backup, nutrition (profile, calorie, protein, carb and fat targets, the food log with search over bundled Japanese and US food tables, recently logged, serving sizes and numbers of servings, adding to several days, the share of today's targets, frequently paired foods, quick add, my foods (with an import file), my meals and recipes, optional fiber, sugar and sodium), weigh-ins (7-day average, progress to goal, a chart, CSV import), and workouts ported from Liftlog (plan templates, set logging pre-filled from last time, a rest timer, PRs, strength trend and volume charts, Liftlog data import), sync to the owner's private GitHub repo (sync now, daily sync, restore on a new phone), a Progress tab (a week's calories, macros, nutrients and weight, foods highest in a macro, a week CSV export), day trackers on the Today tab (fasting with a plan, a live timer, history and a streak; water glasses against a goal; exercise calories and steps with net calories), and coach cards on the Today tab (today against the targets with meal ideas that fit, protein this week, this week against last week, the week's biggest win), and barcode scan (the camera reads the barcode on the phone, Open Food Facts fills in a my food) and voice search in the add sheet.
 
 ## System Overview
 
@@ -21,6 +21,7 @@ The product plan and its decisions live in the owner's knowledge hub, not here. 
 | Page shell | `index.html` | Header (brand, Data & backup button), the `<main id="view">` the app renders into, the polite live region `#announcer` that speaks view changes to screen readers (see [frontend.md](frontend.md#screen-reader-announcements)), the rest-timer bar, the four-tab bottom bar, the backup sheet `<dialog>`, PWA meta tags, the Content Security Policy meta (see [sync.md](sync.md#content-security-policy)) |
 | App logic | `app.js`, `ui.js`, `contrast.js` | Tab routing (URL hash), view rendering, the Data & backup sheet; shared UI helpers and the general sheet; the High contrast setting. See [frontend.md](frontend.md) |
 | Nutrition | `nutrition.js`, `foods.js`, `nutrition-view.js`, `mfp.js`, `foods/` | Targets maths and food search (pure, unit-tested), the Nutrition tab and its sheets, the MyFitnessPal import, the bundled food tables. See [nutrition.md](nutrition.md) |
+| Barcode and voice | `barcode.js`, `openfoodfacts.js`, `scan-view.js` | The bundled barcode decoder and the Open Food Facts lookup (pure, unit-tested), the scanner screen and voice search. See [nutrition.md](nutrition.md#barcode-scan) |
 | Weight | `weight.js`, `weight-view.js` | Weigh-in maths and CSV parsing (pure, unit-tested), the Today tab's weight card, chart and sheets. See [weight.md](weight.md) |
 | Workouts | `workouts.js`, `workouts-view.js` | Workout maths and the Liftlog migration (pure, unit-tested), the Workouts tab, the rest timer and the Today tab's next-workout card. See [workouts.md](workouts.md) |
 | Progress | `progress.js`, `progress-view.js` | Week totals, averages, macro split, foods highest in and the week CSV (pure, unit-tested), the Progress tab. See [progress.md](progress.md) |
@@ -33,7 +34,7 @@ The product plan and its decisions live in the owner's knowledge hub, not here. 
 | Offline + install | `sw.js`, `manifest.webmanifest`, `icons/` | Service worker caches the app for offline use; the manifest and icons make it installable. See [deployment.md](deployment.md) |
 | Tests and checks | `tests/`, `scripts/`, `package.json` | Unit tests (Node's built-in runner), a fast repo check (including the color contrast floors), and the food-table build script; `package.json` has no dependencies and only marks the scripts as ES modules. See [local-dev.md](local-dev.md) |
 
-How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), which imports `db.js`, `backup.js`, `ui.js`, `contrast.js` (the High contrast setting), `mfp.js` (the MyFitnessPal import), `sync-view.js` (which imports `sync.js` and `merge.js`), `weight-view.js` (which imports `weight.js`), `workouts-view.js` (which imports `workouts.js`), `progress-view.js` (which imports `progress.js`), `trackers-view.js` (which imports `trackers.js`), `coach-view.js` (which imports `coach.js`) and `nutrition-view.js` (which imports `nutrition.js` and `foods.js`, and fetches the food tables from `foods/` on first use). On start, `app.js` opens the IndexedDB database (creating or upgrading it), renders the tab named in the URL hash, runs the daily sync when it is due, and registers `sw.js` when served over https.
+How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), which imports `db.js`, `backup.js`, `ui.js`, `contrast.js` (the High contrast setting), `mfp.js` (the MyFitnessPal import), `sync-view.js` (which imports `sync.js` and `merge.js`), `weight-view.js` (which imports `weight.js`), `workouts-view.js` (which imports `workouts.js`), `progress-view.js` (which imports `progress.js`), `trackers-view.js` (which imports `trackers.js`), `coach-view.js` (which imports `coach.js`) and `nutrition-view.js` (which imports `nutrition.js`, `foods.js`, `scan-view.js` (which imports `barcode.js`) and `openfoodfacts.js`, and fetches the food tables from `foods/` on first use). On start, `app.js` opens the IndexedDB database (creating or upgrading it), renders the tab named in the URL hash, runs the daily sync when it is due, and registers `sw.js` when served over https.
 
 ## Repository Layout
 
@@ -49,6 +50,9 @@ How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), wh
 ├── weight.js              weigh-in maths + CSV (pure, tested)
 ├── weight-view.js         Today weight card, chart, sheets
 ├── mfp.js                 MyFitnessPal export import (pure, tested)
+├── barcode.js             EAN/UPC barcode decoder (pure, tested)
+├── openfoodfacts.js       barcode lookup on Open Food Facts (parse tested)
+├── scan-view.js           scanner screen, voice search
 ├── workouts.js            workout maths + Liftlog import (pure, tested)
 ├── workouts-view.js       Workouts tab, rest timer, Today card
 ├── progress.js            week totals, split, top foods, CSV (pure, tested)
@@ -79,7 +83,7 @@ How they relate: `index.html` loads `styles.css` and `app.js` (an ES module), wh
 ## Tech Stack
 
 - Plain HTML, CSS and JavaScript (ES modules), no framework, no dependencies, no bundler.
-- IndexedDB for all user data; JSON export/import for backup; the GitHub Contents API for sync (the only network call besides this site).
+- IndexedDB for all user data; JSON export/import for backup; the GitHub Contents API for sync and Open Food Facts for barcode lookups (the only network calls besides this site; a lookup sends only the barcode).
 - Service worker + web app manifest for offline use and "Add to Home Screen".
 - Node's built-in test runner for unit tests; GitHub Actions for CI; GitHub Pages for hosting.
 

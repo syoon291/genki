@@ -154,6 +154,18 @@ export function searchKey(s) {
   return String(s).normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+// What was said, as a search: "I had two boiled eggs for breakfast." -> "boiled egg".
+// Leading "add / log / I had / I ate", amounts and units ("2 cups of"), a
+// trailing "for lunch" and punctuation go; plurals lose their s so the
+// word-start search finds both forms ("eggs" -> "egg", "tomatoes" -> "tomato").
+const SPOKEN_LEAD = /^(?:(?:please|um+|uh+|ok(?:ay)?|so|and|then|also|just|i|i've|i'd|we|add|log|put|track|had|have|ate|eaten|drank|got|some|a|an|the|one|two|three|four|five|six|seven|eight|nine|ten|half|quarter|couple|few|of|[\d.,/]+|cups?|glass(?:es)?|bowls?|plates?|pieces?|slices?|servings?|portions?|cans?|bottles?|packs?|bars?|scoops?|spoons?|tablespoons?|teaspoons?|tbsp|tsp|handfuls?|grams?|g|kilos?|ml|oz|ounces?|pounds?|lbs?)\s+)+/;
+const SPOKEN_TAIL = /\s+(?:(?:for|at|with|as|to)\s+(?:my\s+)?(?:breakfast|lunch|dinner|supper|snacks?|today|tonight|this\s+morning))+$/;
+export function spokenQuery(text) {
+  let s = String(text ?? "").toLowerCase().replace(/[.!?;:"“”]+/g, " ").replace(/\s+/g, " ").trim();
+  for (let i = 0; i < 3; i++) s = s.replace(SPOKEN_TAIL, "").replace(SPOKEN_LEAD, "");
+  return s.split(" ").map((w) => (w.length > 3 && /oes$/.test(w) ? w.slice(0, -2) : w.length > 3 && /[^su]s$/.test(w) ? w.slice(0, -1) : w)).join(" ").trim();
+}
+
 // Words of the query must each start a word of the name (any order).
 // Ranked: my foods first, then names that start with the query, then names
 // where the words come early, then shorter (more generic) names. `lists` is an array of food arrays, searched in order.

@@ -4,6 +4,11 @@ owns:
   - foods.js
   - nutrition-view.js
   - mfp.js
+  - barcode.js
+  - openfoodfacts.js
+  - scan-view.js
+  - tests/barcode.test.mjs
+  - tests/scan.test.mjs
   - foods/**
 status: current
 ---
@@ -58,6 +63,20 @@ Before anything is typed, the sheet shows **My meals** (most recently used first
 **Quick add** takes a name, kcal and protein (carbs, fat, fiber, sugar and sodium optional) straight from a label, logged as one serving, and can save it to my foods.
 
 **My foods** are the owner's own items with per-serving numbers (name, optional brand or place, serving label, optional serving weight, kcal, protein, carbs, fat, and optional fiber, sugar and sodium). The My foods sheet lists, creates, edits and deletes them; each use bumps a counter and a last-used time. The brand shows under the name and is searched with it ("qdoba bowl").
+
+### Barcode scan
+
+The barcode button beside the search box ("Scan a barcode"; **Scan barcode** in the My foods sheet) opens the scanner: the back camera's picture inside the sheet with a guide box, **Take a photo instead** (the phone's camera or photo library, for when the live camera will not start or focus), and a field for the digits under the bars. It reads EAN-13, UPC-A, EAN-8 and UPC-E codes.
+
+- **Reading the bars** happens on the phone, in `barcode.js` (bundled, no remote script): about ten times a second it reads 11 rows across the guide box of a camera frame, turns each into runs of dark and light (edges placed between pixels, two thresholds: the row's midpoint and a local one for uneven light), matches the guard bars and digit patterns, and checks the check digit. A code is taken once two rows of one frame, or two frames in a row, agree. A photo is read across 31 rows and 31 columns at two sizes. Codes are stored in one form: UPC-A and UPC-E as their 13-digit EAN (a leading 0), EAN-8 as it is (`normalizeBarcode`).
+- **A my food with that barcode** goes straight to the amount step, with no lookup.
+- **Otherwise genki asks Open Food Facts** (`openfoodfacts.js`), the open database of food packages: one GET to `world.openfoodfacts.org/api/v2/product/<code>.json` for the fields it uses, with no cookies and no referrer, so only the barcode leaves the phone. Its numbers become a my food per the package's serving when it gives one in g or ml (else per 100 g or 100 ml), with kcal worked out from kJ and sodium from salt when only those are given (`foodFromProduct`). The **Save to my foods** step shows them in the usual my food fields, to check against the label and correct; saving stores the my food with its `barcode`, so the next scan finds it on the phone. From the add sheet it then opens the amount step; from My foods it returns to the list.
+- **Not found** (or found without calories, or no connection): the same step opens empty (with the product's name if it had one) and says why; typing the label's numbers and saving makes the next scan find it.
+- The camera stops when a code is read, on Back and when the sheet closes. If the camera is refused or missing (or has not started after 8 seconds), the scanner says so and the photo and the typed number still work. Open Food Facts data is under the Open Database License; a scanned food is a copy kept on the owner's phone, never in this repo.
+
+### Voice search
+
+When the browser has speech recognition (Safari on iPhone does), a mic button sits beside the search box. Tapping it listens once in the phone's language and puts what was said into the search as it is heard: leading "add / log / I had", amounts and units ("two cups of"), a trailing "for breakfast" and punctuation are dropped, and plurals lose their s, so "I had two boiled eggs for breakfast" searches "boiled egg" (`spokenQuery` in `foods.js`). The button reads "Stop listening" (pressed) while it listens. If the phone refuses (speech recognition can be off for an installed web app), a line under the search box says so and points to the keyboard's own mic, which works in any field. The words are recognised by the phone's own speech service (Apple's or Google's, which may process the audio on their servers); genki itself sends nothing. A tap on the mic after leaving and coming back to the search starts a fresh listen.
 
 ### Import My foods
 
