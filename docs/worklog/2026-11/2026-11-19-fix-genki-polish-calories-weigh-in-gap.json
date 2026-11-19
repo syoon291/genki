@@ -1,0 +1,1 @@
+{"date": "2026-11-19", "project": "genki", "summary": "Nutrition day list shows each entry's calories larger and bolder; the Log weight and Edit weigh-in sheets get a wider gap between Day and Weight, and date inputs no longer overflow their column on iOS Safari.", "pr": 17, "why": "The owner found per-food calories hard to read and the weigh-in fields cramped on the phone."}

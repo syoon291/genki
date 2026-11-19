@@ -18,7 +18,7 @@ Weigh-ins live on the Today tab, under the nutrition tiles: a weight card with t
 
 A weigh-in is one weight in kg for one local day (store `weighIns`, keyed by the day; shape in [data-flow.md](data-flow.md#store)). There is at most one per day: logging a day that has one replaces it. Weights must be 30-300 kg (the profile's bounds), rounded to 0.1 kg; days in the future are refused. lb is shown beside kg.
 
-- **Log weight** (card and history): a day (today by default) and a weight. Opened on a day that has one, it edits it and offers Delete, which asks to confirm (naming the day and weight) first; moving it to another day replaces that day's.
+- **Log weight** (card and history): a day (today by default) and a weight, side by side with a wider gap between the fields. Opened on a day that has one, it edits it and offers Delete, which asks to confirm (naming the day and weight) first; moving it to another day replaces that day's.
 - **History**: every weigh-in, newest first, with the 7-day average on that day. Tap one to edit or delete it.
 - Saving or deleting a weigh-in tells screen readers the new 7-day average ([frontend.md](frontend.md#screen-reader-announcements)).
 

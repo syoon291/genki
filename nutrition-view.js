@@ -116,7 +116,7 @@ export async function nutritionView() {
       const n = entryNutrients(e);
       return `<li><button type="button" class="entry" data-act="n-entry" data-id="${esc(e.id)}">
         <span class="entry-name">${esc(e.name)}<span class="hint">${esc(amountText(e))}</span></span>
-        <span class="entry-num">${int(n.kcal)}<span class="hint">${dec1(n.protein)}g P</span></span>
+        <span class="entry-num"><span class="entry-kcal">${int(n.kcal)}<span class="unit"> kcal</span></span><span class="hint">${dec1(n.protein)}g P</span></span>
       </button></li>`;
     }).join("");
     return `<section class="meal">
