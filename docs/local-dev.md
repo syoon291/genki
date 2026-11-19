@@ -39,6 +39,8 @@ Two fast stacks, both in the manifest and both run by CI on every PR:
 
 `foods/jp.json` and `foods/us.json` are built files, committed. To rebuild them after a source update, download the three sources named at the top of `scripts/build-foods.mjs` into one folder (the MEXT 2020 sheet as `mext2020.xlsx`, the 2015 English sheet as `mext2015en.xlsx`, the USDA SR Legacy CSV zip unzipped as `sr/`), then run the script from the repo root with that folder as its argument. It needs `unzip` on the path (`scripts/xlsx.mjs` reads the spreadsheets with it) and no packages. Review the diff: one food per line. What the script keeps and why is in [nutrition.md](nutrition.md#food-tables).
 
+`scripts/workout-history.mjs` turns the owner's parsed older workout log into a file the app imports ([workouts.md](workouts.md#workout-history-import)). It reads and writes only the folder it is given (the owner's data folder, never this repo); its tests use made-up sets.
+
 ## Gotchas
 
 - Public repo: test fixtures use made-up values only, never the owner's real data.
