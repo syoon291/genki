@@ -124,3 +124,79 @@ test("a restore or import resets tombstones to the file's own", () => {
   const t = [tomb("entries", "b", 3)];
   assert.deepEqual(withTombstones({ ...file, [TOMBSTONES]: t })[TOMBSTONES], t);
 });
+
+// Two devices scanned the same (made-up) package before syncing.
+const food = (id, created, edited, extra = {}) => ({ id, name: `Bar ${id}`, kcal: 200, protein: 10, serving: "1 bar", barcode: "4900000000017", uses: 1, lastUsed: T(edited), createdAt: T(created), editedAt: T(edited), ...extra });
+
+test("two my foods with the same barcode merge into one, the same one on either device", () => {
+  const a = food("a", 2, 3, { uses: 4 });
+  const b = food("b", 1, 5, { kcal: 210, uses: 2 });
+  for (const [local, remote] of [[{ myFoods: [a] }, { myFoods: [b] }], [{ myFoods: [b] }, { myFoods: [a] }]]) {
+    const m = mergeStores(local, remote, KEY_PATHS);
+    assert.equal(m.myFoods.length, 1);
+    const kept = m.myFoods[0];
+    assert.equal(kept.id, "b"); // made first
+    assert.equal(kept.kcal, 210); // the newest edit's numbers
+    assert.equal(kept.uses, 4);
+    assert.equal(kept.lastUsed, T(5));
+    assert.equal(kept.createdAt, T(1));
+    const t = m[TOMBSTONES].find((x) => x.id === tombstoneId("myFoods", "a"));
+    assert.equal(t.mergedInto, "b");
+    assert.equal(t.at, T(5));
+  }
+});
+
+test("foods without a barcode, or with different ones, stay apart", () => {
+  const m = mergeStores({ myFoods: [food("a", 1, 2, { barcode: "" }), food("c", 1, 2, { barcode: "4900000000024" })] }, { myFoods: [food("b", 1, 2, { barcode: undefined }), food("d", 1, 2)] }, KEY_PATHS);
+  assert.deepEqual(ids(m.myFoods), ["a", "b", "c", "d"]);
+  assert.equal(m[TOMBSTONES], undefined);
+});
+
+test("entries and my meals that used the merged copy point at the kept food", () => {
+  const local = {
+    myFoods: [food("a", 2, 3)],
+    entries: [entry("e1", 3, { source: "my", ref: "a" }), entry("e2", 3, { source: "jp", ref: "a" })],
+    myMeals: [{ id: "m1", name: "Snack", items: [{ name: "Bar a", source: "my", ref: "a", amount: 1, unit: "1 bar", base: { kcal: 200 } }], createdAt: T(3), editedAt: T(3) }],
+  };
+  const m = mergeStores(local, { myFoods: [food("b", 1, 4)] }, KEY_PATHS);
+  assert.equal(m.entries.find((e) => e.id === "e1").ref, "b");
+  assert.equal(m.entries.find((e) => e.id === "e2").ref, "a"); // a table food, not a my food
+  assert.equal(m.myMeals[0].items[0].ref, "b");
+});
+
+test("a device that still has the merged copy drops it and re-points its entries on its next sync", () => {
+  const first = mergeStores({ myFoods: [food("a", 2, 3)] }, { myFoods: [food("b", 1, 4)] }, KEY_PATHS);
+  const other = { myFoods: [food("a", 2, 3)], entries: [entry("e1", 3, { source: "my", ref: "a" })] };
+  const m = mergeStores(other, first, KEY_PATHS);
+  assert.deepEqual(ids(m.myFoods), ["b"]);
+  assert.equal(m.myFoods[0].uses, 1); // not counted twice
+  assert.equal(m.entries[0].ref, "b");
+  // Merging again changes nothing.
+  assert.deepEqual(diffStores(m, mergeStores(m, first, KEY_PATHS), KEY_PATHS), []);
+});
+
+test("a merged copy edited afterwards with a new barcode is its own food again and keeps its entries", () => {
+  const first = mergeStores({ myFoods: [food("a", 2, 3)] }, { myFoods: [food("b", 1, 4)] }, KEY_PATHS);
+  const revived = {
+    myFoods: [food("a", 2, 6, { barcode: "4900000000024" })],
+    entries: [entry("e1", 7, { source: "my", ref: "a" })],
+  };
+  for (const [local, remote] of [[revived, first], [first, revived]]) {
+    const m = mergeStores(local, remote, KEY_PATHS);
+    assert.deepEqual(ids(m.myFoods), ["a", "b"]);
+    assert.equal(m.myFoods.find((f) => f.id === "a").barcode, "4900000000024");
+    assert.equal(m.entries.find((e) => e.id === "e1").ref, "a");
+    // Merging again changes nothing.
+    assert.deepEqual(diffStores(m, mergeStores(m, first, KEY_PATHS), KEY_PATHS), []);
+  }
+});
+
+test("a merged copy that comes back with the same barcode is merged again and its entries re-pointed", () => {
+  const first = mergeStores({ myFoods: [food("a", 2, 3)] }, { myFoods: [food("b", 1, 4)] }, KEY_PATHS);
+  const revived = { myFoods: [food("a", 2, 6)], entries: [entry("e1", 7, { source: "my", ref: "a" })] };
+  for (const [local, remote] of [[revived, first], [first, revived]]) {
+    const m = mergeStores(local, remote, KEY_PATHS);
+    assert.deepEqual(ids(m.myFoods), ["b"]);
+    assert.equal(m.entries.find((e) => e.id === "e1").ref, "b");
+  }
+});
