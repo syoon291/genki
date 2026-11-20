@@ -1,0 +1,1 @@
+{"date": "2026-11-20", "project": "genki", "summary": "A second tap or Enter on a sheet's Add/Log control (and on Repeat yesterday) is dropped while the first write is still pending, through a shared singleFlight guard in ui.js, so one tap logs one entry.", "pr": 0, "why": "A quick double tap on Add logged the same food twice."}

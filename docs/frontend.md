@@ -41,7 +41,7 @@ Saving a my meal says its name and how many foods it holds. Status lines inside 
 
 ## General sheet
 
-`ui.js` drives a second `<dialog>` (`#panel-dialog`, same bottom-sheet look) that views fill with their own content: `openPanel(html, handlers)` shows it, `swapPanel()` replaces its content for the next step of a flow (with a back button), `closePanel()` hides it. Handlers get every tap on a `[data-act]` element, every form submit (default prevented) and every input change inside it; `data-act="close"` always closes. Closing returns focus to the control that opened the sheet. Forms use `novalidate` and show the first problem in a status line.
+`ui.js` drives a second `<dialog>` (`#panel-dialog`, same bottom-sheet look) that views fill with their own content: `openPanel(html, handlers)` shows it, `swapPanel()` replaces its content for the next step of a flow (with a back button), `closePanel()` hides it. Handlers get every tap on a `[data-act]` element, every form submit (default prevented) and every input change inside it; `data-act="close"` always closes. Closing returns focus to the control that opened the sheet. Forms use `novalidate` and show the first problem in a status line. One tap is one write: a tapped control or submitted form whose handler is still running ignores a second tap or Enter until it finishes (`singleFlight()` in `ui.js`, keyed per element or form), so Add and Log cannot log an entry twice.
 
 ## Data & backup sheet
 

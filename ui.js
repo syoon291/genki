@@ -37,6 +37,19 @@ export function newId() {
 
 let handlers = {};
 let opener = null;
+
+// One tap = one write. run() is called only when `key` is not already in
+// `busy` (a Set or WeakSet); the key stays busy until run's promise settles,
+// so a second tap or submit while the first write is pending is dropped
+// (returns null) instead of logging the same entry twice.
+export function singleFlight(busy, key, run) {
+  if (busy.has(key)) return null;
+  busy.add(key);
+  let p;
+  try { p = Promise.resolve(run()); } catch (err) { busy.delete(key); throw err; }
+  return p.finally(() => busy.delete(key));
+}
+const busyEls = new WeakSet();
 const dialog = () => $("#panel-dialog");
 
 // ---------- focus that survives a re-render ----------
@@ -109,11 +122,15 @@ export function initPanel() {
     const el = e.target.closest("[data-act]");
     if (!el || !p.contains(el)) return;
     if (el.dataset.act === "close") { closePanel(); return; }
-    handlers.click?.(el.dataset.act, el, e);
+    // A tapped control whose handler is still writing ignores a second tap.
+    const h = handlers;
+    singleFlight(busyEls, el, () => h.click?.(el.dataset.act, el, e));
   });
   p.addEventListener("submit", (e) => {
     e.preventDefault();
-    handlers.submit?.(e.target, e);
+    // A form whose submit is still writing ignores a second tap or Enter.
+    const h = handlers;
+    singleFlight(busyEls, e.target, () => h.submit?.(e.target, e));
   });
   p.addEventListener("input", (e) => handlers.input?.(e));
   p.addEventListener("change", (e) => { if (e.target.matches("select, input[type=radio], input[type=checkbox]")) handlers.input?.(e); });
