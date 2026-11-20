@@ -7,7 +7,7 @@ import * as db from "./db.js";
 import { ACTIVITY, DEFAULT_DEFICIT, MACRO_LIMITS, DEFAULT_PROTEIN_PER_KG, MAX_DEFICIT, PROTEIN_RANGE, MEALS, profileProblems, targets, projection, dayKey, shiftDay, byMeal, sumEntries, entryNutrients, kgToLb, mealForHour, parseWeeklyCsv, dayTotalsMessage, weekDays, pctOfTargets } from "./nutrition.js";
 import { SOURCES, EXTRAS, extrasOf, fromTableRow, fromMyFood, searchFoods, makeEntry, scaleNutrients, recentLogged, pairedFoods, foodLogKey, servingSizes, itemFromEntry, itemsTotal, mealEntries, recipePerServing, parseMyFoodsFile, planMyFoodsImport } from "./foods.js";
 import { exerciseLine } from "./trackers-view.js";
-import { esc, int, dec1, newId, announce, openPanel, swapPanel, closePanel, panelEl, closeBtn, backBtn } from "./ui.js";
+import { esc, int, dec1, newId, announce, openPanel, swapPanel, closePanel, panelEl, closeBtn, backBtn, singleFlight } from "./ui.js";
 import { openScanner, micBtn, startVoice, stopVoice } from "./scan-view.js";
 import { lookupBarcode } from "./openfoodfacts.js";
 
@@ -183,8 +183,10 @@ export async function handleViewClick(act, el) {
   else if (act === "n-weeks") await openWeeks();
   else if (act === "n-add") await openAdd(el.dataset.meal);
   else if (act === "n-entry") await openEntry(el.dataset.id);
-  else if (act === "n-repeat") await repeatPrevious();
+  else if (act === "n-repeat") await singleFlight(busyView, "repeat", repeatPrevious);
 }
+
+const busyView = new Set();
 
 async function repeatPrevious() {
   const prev = await db.getByIndex("entries", "date", shiftDay(day, -1));
