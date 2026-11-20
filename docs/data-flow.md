@@ -22,7 +22,7 @@ All user data lives in the browser, in one IndexedDB database. It leaves the dev
 | `weighIns` | `date` | Weigh-ins, at most one per local day (version 3). See [weight.md](weight.md) |
 | `workouts` | `id` | Finished workout sessions (version 4). See [workouts.md](workouts.md) |
 | `nutritionWeeks` | `weekStart` | Imported weekly nutrition averages, read-only history (version 5). See [nutrition.md](nutrition.md#weekly-history) |
-| `deleted` | `id` | Tombstones, one per deleted record, so sync carries deletes (version 6): `{ id: "<store>:<key as JSON>", store, key, at (ISO time deleted) }`. See [sync.md](sync.md#how-the-merge-decides) |
+| `deleted` | `id` | Tombstones, one per deleted record, so sync carries deletes (version 6): `{ id: "<store>:<key as JSON>", store, key, at (ISO time deleted), mergedInto? }`; `mergedInto` (the kept id) marks a my food that sync folded into another with the same barcode, an optional field, so no store or backup schema change came with it. See [sync.md](sync.md#how-the-merge-decides) |
 | `myMeals` | `id` | My meals: several foods saved as one item (version 7). See [nutrition.md](nutrition.md#my-meals) |
 | `days` | `date` | Day trackers, one record per local day: water and exercise (version 8). See [trackers.md](trackers.md) |
 | `fasts` | `id` | Fasts, finished and running (version 8). See [trackers.md](trackers.md#fasting) |
