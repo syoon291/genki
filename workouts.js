@@ -421,7 +421,9 @@ export function sessionSavedMessage(session, prs) {
 // a hard right-hand set is "7HR" or "7RHH").
 // parseReps(text) -> { reps, extra?, hard?, side?, repsL?, repsR?, drop?, note? }
 // or null. Strict (the default) refuses any other text; { lenient: true } keeps
-// it as the note (for old logs like "8 slow warm").
+// words after the reps as the note (for old logs like "8 slow warm"), but never
+// a second number ("3x10", "8-10", "12/10" are refused, not read as 3, 8, 12).
+// Full-width digits and signs (a Japanese or Chinese keyboard) read as ASCII.
 const n2 = (v) => +(+v).toFixed(2);
 
 function oneSide(s) {
@@ -443,8 +445,11 @@ function oneSide(s) {
   return out;
 }
 
+// Leftover text that may be a note: it starts with a letter and is not "x10" (sets x reps).
+const wordy = (rest) => /^\p{L}/u.test(rest) && !/^[x×]\s*\d/i.test(rest);
+
 export function parseReps(text, { lenient = false } = {}) {
-  let s = String(text ?? "").replace(/,/g, ".").trim();
+  let s = String(text ?? "").normalize("NFKC").replace(/,/g, ".").trim();
   if (!s) return null;
   const notes = [];
   let hard = false;
@@ -456,6 +461,8 @@ export function parseReps(text, { lenient = false } = {}) {
   if (parts.length === 2) {
     const a = oneSide(parts[0]), b = oneSide(parts[1]);
     if (!a || !b) return null;
+    if (a.rest && !wordy(a.rest)) return null;
+    if (b.rest && !wordy(b.rest)) return null;
     if (a.rest) notes.push(a.rest);
     if (b.rest) notes.push(b.rest);
     // A side without a letter is the other one: "10L: 8H" is 8 on the right.
@@ -469,6 +476,7 @@ export function parseReps(text, { lenient = false } = {}) {
   } else if (parts.length === 1) {
     const a = oneSide(s);
     if (!a) return null;
+    if (a.rest && !wordy(a.rest)) return null;
     if (a.rest) notes.push(a.rest);
     out = { reps: a.reps };
     if (a.extra) out.extra = a.extra;
@@ -544,6 +552,15 @@ export function cleanSet(x, known) {
   const note = str(x.note, 200);
   if (note) out.note = note;
   return out;
+}
+
+// The import message's line for owner exercises that a file renames (names: id -> the name
+// genki has now), or "" when none is renamed.
+export function renamedText(exercises, names) {
+  const r = exercises.filter((e) => names[e.id] != null && names[e.id] !== e.name);
+  if (!r.length) return "";
+  const shown = r.slice(0, 3).map((e) => `${names[e.id]} is now ${e.name}`).join("; ");
+  return `Renamed ${r.length === 1 ? "1 exercise" : `${r.length} exercises`}: ${shown}${r.length > 3 ? `; and ${r.length - 3} more` : ""}.`;
 }
 
 // File text -> { unit, exercises, sessions } or null when it is not a history file.

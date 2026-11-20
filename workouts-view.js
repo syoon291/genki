@@ -107,11 +107,15 @@ async function importHistory(d) {
   const fresh = L.newSessions(S.sessions, d.sessions);
   const used = new Set(fresh.flatMap((s) => s.sets.map((x) => x.exId)));
   const exercises = d.exercises.filter((e) => used.has(e.id) && S.names[e.id] !== e.name);
+  // An owner exercise already here under another name takes the file's name (so
+  // a re-run after merging names takes effect); the message says so.
+  const renamed = L.renamedText(exercises, S.names);
   if (exercises.length) await db.putMany("exercises", exercises);
   if (fresh.length) await db.putMany("workouts", fresh);
   const sets = fresh.reduce((a, s) => a + s.sets.length, 0);
   const had = d.sessions.length - fresh.length;
   let text = `Added ${plural(fresh.length, "session")} (${plural(sets, "set")})${had ? `; ${plural(had, "session")} ${had === 1 ? "was" : "were"} already here` : ""}.`;
+  if (renamed) text += ` ${renamed}`;
   if (fresh.length && d.unit === "lb" && S.unit !== "lb") { await db.setMeta(META.unit, "lb"); text += " Weights now show in pounds, as in your log (change it under Weight unit)."; }
   return text;
 }
