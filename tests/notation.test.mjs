@@ -189,3 +189,57 @@ test("convertHistory gives names that slug alike their own ids", () => {
   assert.notEqual(ids[0], ids[1]);
   assert.equal(file.exercises.length, 2);
 });
+
+test("lenient parse refuses a second number instead of reading the first", () => {
+  for (const t of ["3x10", "3 x 10", "3×10", "8-10", "12/10", "8 x10 slow"]) assert.equal(L.parseReps(t, { lenient: true }), null, t);
+  assert.deepEqual(L.parseReps("8 reps", { lenient: true }), { reps: 8, note: "reps" });
+  assert.deepEqual(L.parseReps("7x", { lenient: true }), { reps: 7, note: "x" });
+});
+
+test("parseReps reads full-width digits and signs", () => {
+  assert.deepEqual(L.parseReps("８"), { reps: 8 });
+  assert.deepEqual(L.parseReps("７＋１Ｈ"), { reps: 7, extra: 1, hard: true });
+  assert.deepEqual(L.parseReps("１０Ｒ：７Ｌ"), { reps: 7, repsL: 7, repsR: 10 });
+  assert.deepEqual(L.parseReps("６．５"), { reps: 6.5 });
+});
+
+test("convertHistory leaves out and lists sets with a second number, and counts noted sets", () => {
+  const log = { sessions: [{ id: 1, date: "2023-07-01", label: "Test", notes: [], exercises: [
+    { name: "Test press", key: "test press", sets: [
+      { weight: 10, unit: "kg", raw: "3x10", reps: 3 },
+      { weight: 10, unit: "kg", raw: "8-10", reps: 8 },
+      { weight: 10, unit: "kg", raw: "fast 12/10", reps: 12 },
+      { weight: 10, unit: "kg", raw: "8 slow" },
+      { weight: 10, unit: "kg", raw: "9" },
+    ] },
+  ] }] };
+  const { file, stats } = convertHistory(log);
+  assert.deepEqual(file.sessions[0].sets.map((x) => x.reps), [8, 9]);
+  assert.equal(stats.skipped.unclear, 3);
+  assert.deepEqual(stats.unclear, ["3x10", "8-10", "fast 12/10"]);
+  assert.equal(stats.noted, 1);
+  assert.equal(stats.fallback, 0);
+});
+
+test("convertHistory gives non-Latin names their own stable ids and keeps Latin ids", () => {
+  const ex = (name) => ({ name, key: name.toLowerCase(), sets: [{ weight: 10, unit: "kg", raw: "8" }] });
+  const log = { sessions: [{ id: 1, date: "2023-08-01", label: "Test", notes: [], exercises: [ex("テスト"), ex("Тест"), ex("Test row 테스트"), ex("Test café row")] }] };
+  const a = convertHistory(log).file, b = convertHistory(log).file;
+  const ids = a.exercises.map((e) => e.id);
+  assert.equal(new Set(ids).size, 4);
+  assert.deepEqual(ids, b.exercises.map((e) => e.id));
+  for (const id of ids) assert.match(id, /^x-[a-z0-9-]{1,60}$/);
+  assert.match(ids[0], /^x-ex-[a-z0-9]+$/);
+  assert.match(ids[2], /^x-test-row-[a-z0-9]+$/);
+  assert.equal(ids[3], "x-test-cafe-row");
+  assert.equal(L.fromHistoryFile(JSON.stringify(a)).exercises.length, 4);
+  assert.notEqual(normKey("テスト"), normKey("Тест"));
+});
+
+test("renamedText names exercises a history file renames", () => {
+  const names = { "x-a": "Test row", "x-b": "Test curl" };
+  assert.equal(L.renamedText([{ id: "x-a", name: "Test cable row" }, { id: "x-c", name: "New" }], names), "Renamed 1 exercise: Test row is now Test cable row.");
+  assert.equal(L.renamedText([{ id: "x-b", name: "Test curl" }], names), "");
+  const many = Object.fromEntries([1, 2, 3, 4].map((n) => [`x-${n}`, `Old ${n}`]));
+  assert.match(L.renamedText([1, 2, 3, 4].map((n) => ({ id: `x-${n}`, name: `New ${n}` })), many), /^Renamed 4 exercises: .*; and 1 more\.$/);
+});

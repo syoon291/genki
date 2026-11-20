@@ -24,6 +24,20 @@ import { pathToFileURL } from "node:url";
 import { parseReps, BY_ID, EX, LB_PER_KG, HISTORY_KIND } from "../workouts.js";
 
 const slug = (s) => String(s).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "exercise";
+// FNV-1a of the name, base 36: the same name always gets the same id, so a re-run
+// matches what genki already has.
+const hash = (s) => { let h = 0x811c9dc5; for (const c of String(s).normalize("NFC")) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36).padStart(7, "0"); };
+// A name with letters a slug drops (Korean, Japanese, Cyrillic...) keeps its slug
+// of the Latin part, plus a hash of the whole name: "벤치" and "스쿼트" no longer
+// both become x-exercise. Latin names keep the ids they had.
+const nameSlug = (name) => {
+  const base = slug(name);
+  const lost = /[\p{L}\p{N}]/u.test(String(name).normalize("NFKD").replace(/[\p{M}a-z0-9]/giu, ""));
+  return lost ? `${base === "exercise" ? "ex" : base.slice(0, 50).replace(/-$/, "")}-${hash(name)}` : base;
+};
+// Rep text with a second number ("3x10", "8-10", "12/10"): sets x reps, a range,
+// or two sides? The converter does not guess; such sets are left out and listed.
+const unclear = (raw) => /\d\s*[x×*/\-–]\s*\d/i.test(String(raw ?? "").normalize("NFKC"));
 
 // Word-level normal form for proposing merges: spelling, plural, word order
 // and abbreviation only ("DB bicep curls" ~ "dumbbell curl"), never a change of
@@ -40,7 +54,7 @@ export function normKey(key) {
     .replace(/pull[\s-]*downs?/g, "pulldown").replace(/push[\s-]*downs?/g, "pushdown").replace(/push[\s-]*ups?/g, "pushup").replace(/pull[\s-]*ups?/g, "pullup")
     .replace(/pull[\s-]*overs?/g, "pullover").replace(/chestpress/g, "chest press").replace(/smith machine/g, "smith").replace(/plate load(ed)?/g, "plate")
     .replace(/body ?weight|\bbody\b/g, "").replace(/\bcables\b/g, "cable");
-  let words = k.replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w && !STOP.has(w))
+  let words = k.replace(/[^\p{L}\p{N} ]+/gu, " ").split(/\s+/).filter((w) => w && !STOP.has(w))
     .map((w) => (w.length > 3 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w))
     .map((w) => WORDS[w] ?? w);
   // "bicep curl" is "curl": curls are biceps unless named otherwise.
@@ -85,6 +99,11 @@ function toKg(weight, unit) {
 }
 
 function readSet(x, stats) {
+  if (unclear(x.raw)) {
+    stats.skipped.unclear++;
+    if (stats.unclear.length < 20) stats.unclear.push(String(x.raw));
+    return null;
+  }
   let p = parseReps(x.raw, { lenient: true });
   // Words before the reps ("fast 7", "eccentric 8"): keep them as the note.
   const lead = !p && String(x.raw ?? "").match(/^([a-z][a-z ]*?)\s*(\d.*)$/i);
@@ -101,6 +120,7 @@ function readSet(x, stats) {
     stats.fallback++;
   }
   if (!(p.reps > 0)) { stats.skipped.noReps++; return null; }
+  if (p.note) stats.noted++;
   const set = { reps: p.reps, rir: p.hard ? 0 : null };
   for (const k of ["extra", "hard", "side", "repsL", "repsR", "note"]) if (p[k] != null) set[k] = p[k];
   if (x.is_drop || p.drop) set.drop = true;
@@ -120,7 +140,7 @@ export function convertHistory(log, aliases = { exercises: [] }) {
   // An owner exercise's id from its name; two names that slug alike get a counter, never one shared id.
   const ownId = (name) => {
     name = String(name).slice(0, 80);
-    const base = `x-${slug(name)}`;
+    const base = `x-${nameSlug(name)}`;
     let id = base;
     for (let n = 2; exercises[id] && exercises[id].name !== name; n++) id = `${base.slice(0, 62 - String(n).length - 1)}-${n}`;
     exercises[id] ||= { id, name };
@@ -131,7 +151,7 @@ export function convertHistory(log, aliases = { exercises: [] }) {
     const id = lib || ownId(g.name);
     for (const k of g.keys || []) byKey[k] = id;
   }
-  const stats = { sessionsIn: 0, sessionsOut: 0, setsIn: 0, setsOut: 0, fallback: 0, skipped: { noReps: 0, emptySession: 0 }, units: {} };
+  const stats = { sessionsIn: 0, sessionsOut: 0, setsIn: 0, setsOut: 0, fallback: 0, noted: 0, skipped: { noReps: 0, unclear: 0, emptySession: 0 }, unclear: [], units: {} };
   const sessions = [], ids = new Set();
   for (const s of log.sessions || []) {
     stats.sessionsIn++;
@@ -189,6 +209,7 @@ function main([cmd, dir]) {
   const out = join(dir, "genki-workout-history.json");
   writeFileSync(out, JSON.stringify(file) + "\n");
   console.log(JSON.stringify(stats, null, 1));
+  if (stats.skipped.unclear) console.warn(`${stats.skipped.unclear} sets left out: their reps have a second number (listed under "unclear"; the first ${stats.unclear.length} shown). Rewrite them in workouts.json (one set per entry, e.g. "10") and convert again.`);
   console.log(`-> ${out}`);
 }
 
