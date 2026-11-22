@@ -7,7 +7,7 @@ status: current
 
 # Progress
 
-The Progress tab (the fourth tab, `#progress`) shows one week of the food log and the weigh-ins. It only reads: it adds no store and no record, so nothing new goes into backups or sync. The chosen view, week and "foods highest in" macro live in memory and reset on reload.
+The Progress tab (the fourth tab, `#progress`) shows one week of the food log and the weigh-ins, and the body scans. Apart from the body scans' sheets ([weight.md](weight.md#body-scans)) it only reads. The chosen view, week and "foods highest in" macro live in memory and reset on reload.
 
 | File | Role |
 |------|------|
@@ -30,7 +30,7 @@ A five-button switcher (`aria-pressed`): Overview, Calories, Macros, Nutrients, 
 | Calories | The calorie card plus each day's kcal and how far over or under the target it was, and the week total |
 | Macros | The daily split as stacked bars (carbs, fat, protein share of each day's calories, always adding up to 100 %), a table of the average split against the target split (`macroTargets()` percents), and **foods highest in** carbs, fat or protein: the top five foods by grams that week. Foods are grouped by the food they were logged from (`logKey()`); imported MyFitnessPal entries are one meal's total each, so each stays one item and shows its day |
 | Nutrients | Daily averages of calories, protein, carbs and fat against the targets, then fiber, sugar and sodium where the week's foods list them (my foods, recipes and MyFitnessPal imports carry them when entered or in the export; the bundled tables carry none, so the screen says the real amounts may be higher) |
-| Weight | The overall start, current and change, then the week's seven days with each weigh-in, this week's average and its change on the week before, and a Log weight button (the weight sheet from [weight.md](weight.md)) |
+| Weight | The overall start, current and change, then the week's seven days with each weigh-in, this week's average and its change on the week before, and a Log weight button (the weight sheet from [weight.md](weight.md)), then **Body scans**: the latest scan and its change since the previous one, with Add scan and All scans ([weight.md](weight.md#body-scans)). The Overview adds a one-line summary of the latest scan under Weight |
 
 Without a profile the targets, target lines and over/under figures are left out and a hint points to the Nutrition tab's profile.
 

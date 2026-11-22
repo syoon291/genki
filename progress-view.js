@@ -8,6 +8,7 @@ import { summary, sortWeighIns, round1 } from "./weight.js";
 import { EXTRAS } from "./foods.js";
 import { MACROS, weekTotals, weekAverages, macroSplit, topFoods, weekCsv, weekCsvName, weekMessage } from "./progress.js";
 import { esc, int, dec1, announce } from "./ui.js";
+import { scansCard, scanLine, scanUnit } from "./scans-view.js";
 
 let rerender = () => {};
 export function setProgressRerender(fn) { rerender = fn; }
@@ -50,15 +51,17 @@ function bar(value, target, cls = "") {
 async function load() {
   const start = shownWeek();
   const days = weekDays(start);
-  const [profile, lists, weighIns] = await Promise.all([
+  const [profile, lists, weighIns, scans, unit] = await Promise.all([
     db.getMeta("profile", null),
     Promise.all(days.map((d) => db.getByIndex("entries", "date", d))),
     db.getAll("weighIns"),
+    db.getAll("bodyScans"),
+    scanUnit(),
   ]);
   const entries = lists.flat();
   const t = profile && !profileProblems(profile).length ? targets(profile) : null;
   const wk = weekTotals(entries, start);
-  return { start, days, profile, t, entries, wk, avg: weekAverages(wk), weighIns };
+  return { start, days, profile, t, entries, wk, avg: weekAverages(wk), weighIns, scans, scanUnit: unit };
 }
 
 // ---------- the tab ----------
@@ -99,6 +102,7 @@ function overview(d) {
     ${calorieCard(d)}
     <h3>Weight</h3>
     ${weightSummary(d)}
+    ${scanLine(d.scans, d.scanUnit)}
     <h3>Macros</h3>
     ${macroAverages(d)}`;
 }
@@ -207,7 +211,7 @@ function weight(d) {
     <ul class="entries days-list">${rows}</ul>
     <button type="button" class="btn ghost" data-act="w-log">Log weight</button>
   </div>`;
-  return `<h3>Overall</h3>${weightSummary(d)}<h3>The week</h3>${weekCard}`;
+  return `<h3>Overall</h3>${weightSummary(d)}<h3>The week</h3>${weekCard}<h3>Body scans</h3>${scansCard(d.scans, d.weighIns, d.scanUnit)}`;
 }
 
 // ---------- macros ----------
