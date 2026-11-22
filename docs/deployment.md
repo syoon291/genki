@@ -13,7 +13,7 @@ GitHub Pages, published by the `Pages` GitHub Actions workflow (`.github/workflo
 
 ## CI and build
 
-No compile step. The workflow's build job runs on every pull request and every push to `main`: the unit tests, the fast check, then it copies an explicit list of app files (`index.html`, the JS modules (including `sync.js`, `merge.js`, `sync-view.js`, `contrast.js`, `progress.js`, `progress-view.js`, `trackers.js`, `trackers-view.js`, `coach.js`, `coach-view.js`, `scans.js` and `scans-view.js`), `styles.css`, `sw.js`, `manifest.webmanifest`, `icons/`, and `foods/` with the food tables) into `_site/` and uploads it. Docs, tests, scripts and repo tooling are not published.
+No compile step. The workflow's build job runs on every pull request and every push to `main`: the unit tests, the fast check, then it copies an explicit list of app files (`index.html`, the JS modules (including `sync.js`, `merge.js`, `sync-view.js`, `contrast.js`, `progress.js`, `progress-view.js`, `trackers.js`, `trackers-view.js`, `coach.js`, `coach-view.js`, `scans.js`, `scans-view.js`, and the accounts modules `account.js`, `account-view.js` and `account-config.js`), `styles.css`, `sw.js`, `manifest.webmanifest`, `icons/`, and `foods/` with the food tables) into `_site/` and uploads it. Docs, tests, scripts and repo tooling are not published.
 
 A merge to `main` is the release: the deploy job publishes that artifact and the site updates within a minute or two. A manual run (`workflow_dispatch`) redeploys main. Pull requests never deploy.
 

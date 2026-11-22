@@ -2,11 +2,11 @@
 // (Today: the nutrition tiles, the coach cards from coach-view.js, the weight card from weight-view.js and the
 // next-workout card from workouts-view.js; Progress: the week views from progress-view.js)
 // <main id="view">, and the Data & backup sheet (JSON export/import, and the
-// Sync section from sync-view.js).
+// Account section from account-view.js, and the Sync section from sync-view.js).
 // The tab is kept in the URL hash so a reload stays where you were.
 import * as db from "./db.js";
 import { buildBackup, backupFileName, parseBackup } from "./backup.js";
-import { recordCount } from "./merge.js";
+import { recordCount, mergeStores, diffStores } from "./merge.js";
 import { esc, initPanel, focusKey, restoreFocus } from "./ui.js";
 import { syncSection, handleSyncAct, handleSyncSubmit, setSyncHooks, clearSyncNote, autoSync, syncErrorNotice, hideSyncNotice } from "./sync-view.js";
 import { nutritionView, todayTiles, handleViewClick, setRerender } from "./nutrition-view.js";
@@ -19,6 +19,7 @@ import { fastingCard, dayTrackersCard, handleTrackerClick, setTrackerRerender, i
 import { workoutsView, nextWorkoutCard, handleLiftClick, handleLiftInput, setLiftRerender, initRestTimer } from "./workouts-view.js";
 import { coachCards, handleCoachClick, setCoachRerender } from "./coach-view.js";
 import { initContrast, setContrast, contrastSection } from "./contrast.js";
+import { accountsOn, accountSection, handleAccountAct, handleAccountSubmit, setAccountHooks, clearAccountNote, accountAutoSync, accountErrorNotice, hideAccountNotice, acceptSignInLink, isSignInHash } from "./account-view.js";
 
 const TABS = ["today", "nutrition", "workouts", "progress"];
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -48,6 +49,7 @@ const RENDER = {
   today: async () => `
     <h2>${greeting()}</h2>
     <p class="sub">${esc(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }))}</p>
+    ${storeError ? "" : await accountErrorNotice()}
     ${storeError ? "" : await syncErrorNotice()}
     ${storeError ? "" : await todayTiles()}
     <a class="btn ghost log-link" href="#nutrition">Log food</a>
@@ -101,7 +103,12 @@ view.addEventListener("click", (e) => {
   const el = e.target.closest("[data-act]");
   if (!el || !view.contains(el)) return;
   const act = el.dataset.act;
-  if (act === "sync-notice-open") { openSheet(true).catch((err) => alert(`That did not work: ${err.message}`)); return; }
+  if (act === "account-notice-open") { openSheet("account").catch((err) => alert(`That did not work: ${err.message}`)); return; }
+  if (act === "account-notice-hide") {
+    hideAccountNotice().then(() => render(), (err) => alert(`That did not work: ${err.message}`));
+    return;
+  }
+  if (act === "sync-notice-open") { openSheet("sync").catch((err) => alert(`That did not work: ${err.message}`)); return; }
   if (act === "sync-notice-hide") {
     hideSyncNotice().then(() => render(), (err) => alert(`That did not work: ${err.message}`));
     return;
@@ -143,7 +150,7 @@ async function renderSheet(message = "", tone = "") {
       <h2 id="data-title">Data &amp; backup</h2>
       <button type="button" class="icon-btn" data-act="close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
-    <p class="sub">Everything genki stores stays in this browser on this device unless you turn on Sync below. Export a backup file to keep a copy or move to another device.</p>
+    <p class="sub">Everything genki stores stays in this browser on this device unless you ${accountsOn() ? "sign in to your account or " : ""}turn on Sync below. Export a backup file to keep a copy or move to another device.</p>
     <dl class="facts">
       <div><dt>Records stored</dt><dd>${total}</dd></div>
       <div><dt>Last export</dt><dd>${esc(fmtDate(lastExport))}</dd></div>
@@ -153,12 +160,13 @@ async function renderSheet(message = "", tone = "") {
       <button type="button" class="btn" data-act="export">Export backup (JSON)</button>
       <button type="button" class="btn ghost" data-act="import">Import backup…</button>
     </div>
-    <p class="hint">Importing replaces what is stored here with the backup's contents.</p>
+    <p class="hint">Importing merges the backup into what is stored here: records from both are kept, and where both have the same one, the newer edit wins. Nothing is replaced.</p>
     <div class="stack">
       <button type="button" class="btn ghost" data-act="mfp">Import MyFitnessPal…</button>
     </div>
     <p class="hint">Pick the CSV files from a MyFitnessPal export (Nutrition-Summary, Measurement-Summary, Exercise-Summary). Each day's meals go into the food log, meals you had more than once become my foods, weights fill days with no weigh-in, and exercise calories and steps fill days with no exercise logged. Nothing already here is replaced.</p>
     <p class="msg ${tone}" role="status">${esc(message)}</p>
+    ${await accountSection()}
     ${contrastSection()}
     ${await syncSection()}`;
 }
@@ -182,14 +190,17 @@ async function doImport(file) {
   if (!parsed.ok) { await renderSheet(parsed.error, "bad"); return; }
   const total = recordCount(parsed.backup.stores);
   const when = parsed.backup.exportedAt ? ` from ${fmtDate(parsed.backup.exportedAt)}` : "";
-  if (!confirm(`Replace the data on this device with the backup${when} (${total} records)? This cannot be undone.`)) {
+  if (!confirm(`Merge the backup${when} (${total} records) into the data on this device? Records from both are kept; where both have the same one, the newer edit wins. Nothing is replaced.`)) {
     await renderSheet("Import cancelled. Nothing changed.");
     return;
   }
-  await db.replaceAll(parsed.backup.stores);
-  // The data is replaced by now: a failure to stamp the time must not report "Nothing changed".
+  // Owner decision: an import merges, never replaces (the same merge as sync).
+  const local = await db.dumpAll();
+  const merged = mergeStores(local, parsed.backup.stores, db.KEY_PATHS);
+  const { applied } = await db.applyChanges(diffStores(local, merged, db.KEY_PATHS));
+  // The data has changed by now: a failure to stamp the time must not report "Nothing changed".
   try { await db.setMeta("lastImportAt", new Date().toISOString()); } catch {}
-  await renderSheet(`Imported ${total} records.`, "good");
+  await renderSheet(applied ? `Imported: ${applied} ${applied === 1 ? "record" : "records"} added or updated.` : "Everything in that backup is already here. Nothing changed.", "good");
   render();
 }
 
@@ -256,13 +267,20 @@ setSyncHooks({
   },
   restored: () => render(),
 });
+setAccountHooks({
+  rerender: () => {
+    render();
+    return dialog.open ? renderSheet().catch((e) => console.warn("genki: could not redraw the sheet", e)) : undefined;
+  },
+  restored: () => render(),
+});
 
-// The Data & backup sheet; from the Today sync notice it opens at the Sync section.
-async function openSheet(toSync = false) {
-  clearSyncNote();
+// The Data & backup sheet; from a Today notice it opens at that section ("sync", "account").
+async function openSheet(section = "", { keepNotes = false } = {}) {
+  if (!keepNotes) { clearSyncNote(); clearAccountNote(); }
   await renderSheet();
   if (!dialog.open) dialog.showModal();
-  if (toSync) sheet.querySelector("#sync-title")?.scrollIntoView({ block: "start" });
+  if (section) sheet.querySelector(`#${section}-title`)?.scrollIntoView({ block: "start" });
 }
 $("#data-btn").addEventListener("click", () => openSheet());
 
@@ -280,11 +298,11 @@ sheet.addEventListener("click", async (e) => {
     await renderSheet();
     sheet.querySelector(`[data-act="contrast"][data-v="${v}"]`)?.focus();
   }
-  if (act) handleSyncAct(act);
+  if (act && !handleAccountAct(act)) handleSyncAct(act);
 });
 sheet.addEventListener("submit", (e) => {
   e.preventDefault();
-  handleSyncSubmit(e.target);
+  if (!handleAccountSubmit(e.target)) handleSyncSubmit(e.target);
 });
 
 // Tap on the backdrop closes the sheet.
@@ -299,6 +317,11 @@ fileInput.addEventListener("change", async () => {
 
 // ---------- start ----------
 
+// The email sign-in link lands here with the tokens in the URL hash: take
+// them out of the address bar (and history) before anything else runs.
+const signInHash = isSignInHash(location.hash) ? location.hash : "";
+if (signInHash) history.replaceState(null, "", `${location.pathname}${location.search}#today`);
+
 try {
   await db.openDB();
   if (!(await db.getMeta("createdAt", null))) await db.setMeta("createdAt", new Date().toISOString());
@@ -306,7 +329,8 @@ try {
   storeError = e.message;
 }
 render();
-if (!storeError) autoSync();
+if (!storeError && signInHash) acceptSignInLink(signInHash).then((handled) => { if (handled) openSheet("account", { keepNotes: true }); }, (e) => console.warn("genki: sign-in link failed", e));
+if (!storeError) { autoSync(); if (!signInHash) accountAutoSync(); }
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});

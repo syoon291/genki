@@ -48,7 +48,8 @@ Saving a my meal says its name and how many foods it holds. Status lines inside 
 The header's download button opens a `<dialog>` (a bottom sheet on a phone, centered from 640px wide). It shows how many records are stored and when the last export and import happened, and has these actions:
 
 - **Export backup (JSON)** records the export time, then downloads `genki-backup-<date>.json` with every store's records.
-- **Import backup...** picks a file, validates it (see [data-flow.md](data-flow.md#backup-file)), shows the error in the sheet if it is not a valid backup, otherwise asks for confirmation and replaces the stored data with the backup's.
+- **Import backup...** picks a file, validates it (see [data-flow.md](data-flow.md#backup-file)), shows the error in the sheet if it is not a valid backup, otherwise asks for confirmation and merges the backup into the stored data (newer edit wins; nothing is replaced).
+- **Account** (only once accounts are set up, [accounts.md](accounts.md)): the privacy note and sign-in by emailed code, then Sync now, Sign out and Delete my account.
 - **Import MyFitnessPal...** picks one or more CSV files from a MyFitnessPal export, asks for confirmation with what it will add, then adds the meals, my foods and weigh-ins, and fills in fiber, sugar and sodium on meals and my foods an earlier import added without them (see [nutrition.md](nutrition.md#myfitnesspal-import)). The result or the reason nothing changed shows in the sheet's status line.
 
 Below them is the **Sync** section (`sync-view.js`, see [sync.md](sync.md)): a token field until a token is saved, then the last sync time, a line saying that a sync merges, and Sync now, Restore from genki-data... and Remove token, with its own status line. The sheet scrolls inside itself when it is taller than the screen.
