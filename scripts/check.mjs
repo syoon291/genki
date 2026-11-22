@@ -4,11 +4,12 @@
 import { readFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { contrastFailures } from "./contrast.mjs";
+import { accountConfigProblem, connectFor } from "./account-rules.mjs";
 
 const fail = (msg) => { console.error(`check failed: ${msg}`); process.exit(1); };
 
 // App files load as ES modules; sw.js is a classic service worker script.
-const MODULES = ["app.js", "db.js", "backup.js", "sync.js", "sync-view.js", "merge.js", "ui.js", "contrast.js", "nutrition.js", "foods.js", "nutrition-view.js", "weight.js", "weight-view.js", "mfp.js", "workouts.js", "workouts-view.js", "progress.js", "progress-view.js", "trackers.js", "trackers-view.js", "coach.js", "coach-view.js", "barcode.js", "openfoodfacts.js", "scan-view.js", "scans.js", "scans-view.js"];
+const MODULES = ["app.js", "db.js", "backup.js", "sync.js", "sync-view.js", "merge.js", "ui.js", "contrast.js", "nutrition.js", "foods.js", "nutrition-view.js", "weight.js", "weight-view.js", "mfp.js", "workouts.js", "workouts-view.js", "progress.js", "progress-view.js", "trackers.js", "trackers-view.js", "coach.js", "coach-view.js", "barcode.js", "openfoodfacts.js", "scan-view.js", "scans.js", "scans-view.js", "account.js", "account-view.js", "account-config.js"];
 for (const [f, args] of [...MODULES.map((m) => [m, ["--input-type=module"]]), ["sw.js", []]]) {
   try { execFileSync(process.execPath, ["--check", ...args], { input: readFileSync(f), stdio: ["pipe", "pipe", "pipe"] }); }
   catch (e) { fail(`${f} does not parse\n${e.stderr}`); }
@@ -45,19 +46,30 @@ for (const m of MODULES) for (const [, f] of readFileSync(m, "utf8").matchAll(/f
 for (const [, f] of readFileSync("index.html", "utf8").matchAll(/(?:href|src)="([^":#]+)"/g)) if (!shell.includes(f)) fail(`index.html loads ${f}, but sw.js does not precache it`);
 
 // The page runs no third-party or inline code: the CSP meta allows scripts
-// from this site only and network calls to this site, the GitHub API (sync)
-// and Open Food Facts (barcode lookup, only the barcode is sent).
+// from this site only and network calls to this site, the GitHub API (sync),
+// Open Food Facts (barcode lookup, only the barcode is sent) and, once
+// account-config.js names it, the owner's backend project and no other.
 const html = readFileSync("index.html", "utf8");
 const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)?.[1];
 if (!csp) fail("index.html has no Content-Security-Policy meta");
 const directive = (name) => csp.split(";").map((d) => d.trim().split(/\s+/)).find((d) => d[0] === name)?.slice(1).join(" ");
 if (directive("script-src") !== "'self'") fail(`CSP script-src must be exactly 'self', found ${directive("script-src")}`);
-const CONNECT = "'self' https://api.github.com https://world.openfoodfacts.org";
+const cfgText = readFileSync("account-config.js", "utf8");
+const cfgValue = (name) => cfgText.match(new RegExp(`export const ${name} = "([^"]*)";`))?.[1];
+const accountUrl = cfgValue("ACCOUNT_URL"), accountKey = cfgValue("ACCOUNT_KEY");
+if (accountUrl === undefined || accountKey === undefined) fail("account-config.js must export ACCOUNT_URL and ACCOUNT_KEY as plain strings");
+const cfgProblem = accountConfigProblem(accountUrl, accountKey);
+if (cfgProblem) fail(cfgProblem);
+const CONNECT = connectFor(accountUrl);
 if (directive("connect-src") !== CONNECT) fail(`CSP connect-src must be exactly ${CONNECT}, found ${directive("connect-src")}`);
 for (const [, tag] of html.matchAll(/<script\b([^>]*)>/g)) if (!/\bsrc="[^":]+"/.test(tag)) fail("index.html has an inline or remote script");
 for (const f of ["index.html", ...MODULES]) if (/\son[a-z]+\s*=\s*["'`]/.test(readFileSync(f, "utf8"))) fail(`${f} has an inline event handler, which the CSP blocks`);
 // Only sync.js talks to GitHub.
 for (const m of MODULES.filter((m) => m !== "sync.js")) if (readFileSync(m, "utf8").includes("api.github.com")) fail(`${m} calls the GitHub API; only sync.js may`);
+// Only account.js talks to the backend, and nothing names a Supabase host but the config.
+for (const m of MODULES.filter((m) => m !== "account-config.js")) if (/supabase\.co/.test(readFileSync(m, "utf8"))) fail(`${m} names a Supabase address; only account-config.js may`);
+for (const m of MODULES.filter((m) => m !== "account.js")) if (/\/(auth|rest)\/v1\//.test(readFileSync(m, "utf8"))) fail(`${m} calls the backend; only account.js may`);
+for (const m of MODULES.filter((m) => m !== "account-view.js")) if (/(from|import)\s*\(?\s*["'][^"']*account-config\.js["']/.test(readFileSync(m, "utf8"))) fail(`${m} imports account-config.js; only account-view.js may`);
 // Only openfoodfacts.js talks to Open Food Facts.
 for (const m of MODULES.filter((m) => m !== "openfoodfacts.js")) if (readFileSync(m, "utf8").includes("openfoodfacts.org")) fail(`${m} calls Open Food Facts; only openfoodfacts.js may`);
 
