@@ -4,10 +4,10 @@
 import { TOMBSTONES, tombstoneId, withTombstones } from "./merge.js";
 
 export const DB_NAME = "genki";
-export const DB_VERSION = 9;
+export const DB_VERSION = 10;
 
 // The keyPath of each store, so a backup can be checked before it replaces anything.
-export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id", weighIns: "date", workouts: "id", nutritionWeeks: "weekStart", [TOMBSTONES]: "id", myMeals: "id", days: "date", fasts: "id", exercises: "id" };
+export const KEY_PATHS = { meta: "key", entries: "id", myFoods: "id", weighIns: "date", workouts: "id", nutritionWeeks: "weekStart", [TOMBSTONES]: "id", myMeals: "id", days: "date", fasts: "id", exercises: "id", bodyScans: "id" };
 
 // UPGRADES[n] moves a database from version n to n+1.
 const UPGRADES = [
@@ -57,6 +57,12 @@ const UPGRADES = [
     // rep notation (fractional reps, hard, extra, one side, drop, bodyweight):
     // added optional fields, so existing sessions need no change.
     db.createObjectStore("exercises", { keyPath: KEY_PATHS.exercises });
+  },
+  (db) => {
+    // Body scans (InBody-style printouts): { id: "scan-<date>[T<time>]", date, time,
+    // unit, weightKg, smmKg, fatKg, leanKg, pbf, vfa, bmr, ecwTbw, at }. Kept apart
+    // from weighIns: a scan's weight is clothed. A new store only.
+    db.createObjectStore("bodyScans", { keyPath: KEY_PATHS.bodyScans });
   },
 ];
 

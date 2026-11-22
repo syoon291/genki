@@ -2,6 +2,8 @@
 owns:
   - weight.js
   - weight-view.js
+  - scans.js
+  - scans-view.js
 status: current
 ---
 
@@ -13,6 +15,8 @@ Weigh-ins live on the Today tab, under the nutrition tiles: a weight card with t
 |------|------|
 | `weight.js` | 7-day average, weekly change, goal progress, chart axis, CSV parsing. Pure, unit-tested (`tests/weight.test.mjs`) |
 | `weight-view.js` | The weight card and chart, the log, history and CSV import sheets |
+| `scans.js` | Body scans: the fields, form parsing with lb/kg, the change between scans. Pure, unit-tested (`tests/scans.test.mjs`) |
+| `scans-view.js` | The Body scans card on the Progress tab's Weight view, the add/edit and history sheets |
 
 ## Weigh-ins
 
@@ -43,3 +47,13 @@ The MyFitnessPal import (Data & backup sheet) brings weights from the export's M
 ## Profile weight
 
 Every weigh-in change (log, edit, delete, import) sets the profile's `weightKg` to the latest 7-day average, rounded to 0.1 kg, so the calorie, protein, carb and fat targets ([nutrition.md](nutrition.md#targets)) follow the trend. Editing the profile's weight by hand still works, until the next weigh-in change rewrites it. Without a saved profile nothing is written.
+
+## Body scans
+
+A body scan is one InBody-style body composition printout (store `bodyScans`, version 10; shape in [data-flow.md](data-flow.md#store)), meant to be added about once a week. It lives on the Progress tab's Weight view under **Body scans**, with a one-line summary on the Overview.
+
+- **Kept apart from the weigh-ins.** A scan's weight is taken in clothes and at any time of day, so it is never written to `weighIns`, the 7-day average, the chart or the profile weight. The card instead says how far the scan read above that day's morning weigh-in, when there is one.
+- **What it records**: weight, skeletal muscle mass, body fat mass, percent body fat, visceral fat area (cm²), basal metabolic rate (kcal), lean body mass and ECW/TBW. Only the weight is required; a box left empty is stored as null. Masses are typed in lb or kg (the printout's unit, remembered per device in meta `scanUnit`) and stored in kg with 3 decimals so a typed lb value reads back exactly.
+- **One per day and time**: the id is `scan-<date>` or `scan-<date>T<HH:MM>`; saving onto an existing one asks before replacing it.
+- **The card**: the latest scan's muscle, body fat % and fat mass in large type, then the other fields, each with its change since the previous scan. A change is green when it moves the good way (more muscle or lean mass, less fat, body fat % or visceral fat); weight, BMR and ECW/TBW are never coloured. Add scan, and All scans (newest first; tap one to edit or delete it, delete asks to confirm).
+- Saving tells screen readers the muscle and body fat % and their change.

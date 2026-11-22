@@ -14,6 +14,7 @@ import { weightCard, handleWeightClick, setWeightRerender, syncProfileWeight } f
 import { detectMfpFile, parseMfpNutrition, parseMfpWeights, parseMfpExercise, planMfpImport, mfpConfirmText, planIsEmpty } from "./mfp.js";
 import { dayKey } from "./nutrition.js";
 import { progressView, handleProgressClick, setProgressRerender } from "./progress-view.js";
+import { handleScanClick, setScanRerender } from "./scans-view.js";
 import { fastingCard, dayTrackersCard, handleTrackerClick, setTrackerRerender, initFastClock } from "./trackers-view.js";
 import { workoutsView, nextWorkoutCard, handleLiftClick, handleLiftInput, setLiftRerender, initRestTimer } from "./workouts-view.js";
 import { coachCards, handleCoachClick, setCoachRerender } from "./coach-view.js";
@@ -90,6 +91,7 @@ setWeightRerender(() => render());
 setLiftRerender(() => render());
 initContrast();
 setProgressRerender(() => render());
+setScanRerender(() => render());
 setTrackerRerender(() => render());
 setCoachRerender(() => render());
 initPanel();
@@ -104,7 +106,7 @@ view.addEventListener("click", (e) => {
     hideSyncNotice().then(() => render(), (err) => alert(`That did not work: ${err.message}`));
     return;
   }
-  const handler = act.startsWith("lift-") ? handleLiftClick : act.startsWith("w-") ? handleWeightClick : act.startsWith("p-") ? handleProgressClick : act.startsWith("t-") ? handleTrackerClick : act.startsWith("c-") ? handleCoachClick : handleViewClick;
+  const handler = act.startsWith("lift-") ? handleLiftClick : act.startsWith("w-") ? handleWeightClick : act.startsWith("p-") ? handleProgressClick : act.startsWith("bs-") ? handleScanClick : act.startsWith("t-") ? handleTrackerClick : act.startsWith("c-") ? handleCoachClick : handleViewClick;
   handler(act, el).catch((err) => alert(`That did not work: ${err.message}`));
 });
 // Typing in the workout set rows and picking from its selects.
