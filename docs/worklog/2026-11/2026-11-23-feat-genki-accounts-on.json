@@ -1,0 +1,1 @@
+{"date": "2026-11-23", "project": "genki", "summary": "Switched accounts on: account-config.js and the CSP connect-src now point at the owner's Tokyo Supabase project (publishable key only), so the Account section appears and sign-in by email code works.", "pr": 25}
