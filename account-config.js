@@ -7,5 +7,5 @@
 // Set both with `node scripts/set-account.mjs <project url> <publishable key>`,
 // which also adds the address to the Content Security Policy in index.html.
 // Never put a secret (service) key here: scripts/check.mjs refuses one.
-export const ACCOUNT_URL = "";
-export const ACCOUNT_KEY = "";
+export const ACCOUNT_URL = "https://ehndhbfewcdrngnwixbj.supabase.co";
+export const ACCOUNT_KEY = "sb_publishable_EflfO9PqEQ4vfPuQCNhO_Q_xtmq2TBL";
